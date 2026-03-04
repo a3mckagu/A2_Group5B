@@ -262,36 +262,40 @@ class Level {
     // ---- Bottles ----
     this.bottles.forEach((b) => {
       if (b.isMoving) {
-        const targetX = layout.cauldron.x - 20;
-        const targetY = layout.cauldron.y - 160;
         const speed = 0.02;
         b.progress += speed;
 
         if (b.isCrystal) {
           // --- CRYSTAL ANIMATION ---
-          const finalY = targetY; // final landing position in cauldron
-          const pauseHeight = targetY - 60; // pause slightly above cauldron
-          let easedProgress = constrain(b.progress, 0, 1);
+          const targetX = layout.cauldron.x; // center of cauldron
 
-          if (easedProgress < 0.6) {
-            // Move toward pause position above cauldron
-            b.x = lerp(b.startX, targetX, easedProgress / 0.6);
-            b.y = lerp(b.startY, pauseHeight, easedProgress / 0.6);
-          } else {
-            // Drop smoothly into cauldron
-            let dropProgress = (easedProgress - 0.6) / 0.4; // normalize 0 → 1
+          const cauldronHeight =
+            (this.assets.cauldronImg.height / this.assets.cauldronImg.width) *
+            layout.cauldron.w;
+
+          const pauseY = layout.cauldron.y - cauldronHeight / 2 - 40; // above cauldron
+          const finalY = layout.cauldron.y + cauldronHeight / 4; // behind cauldron
+
+          // Phase 1: move from start to above cauldron (0 → 0.6)
+          if (b.progress < 0.6) {
+            const t = b.progress / 0.6;
+            b.x = lerp(b.startX, targetX, t);
+            b.y = lerp(b.startY, pauseY, t);
+
+            // Phase 2: drop behind cauldron (0.6 → 1)
+          } else if (b.progress < 1) {
+            const t = (b.progress - 0.6) / 0.4; // normalize 0→1 for drop
             b.x = targetX;
-            b.y = lerp(pauseHeight, finalY, dropProgress);
-          }
+            b.y = lerp(pauseY, finalY, t);
 
-          // End movement
-          if (b.progress >= 1) {
+            // End movement
+          } else {
             b.isMoving = false;
             b.isSelected = false;
             b.progress = 0;
             b.x = targetX;
             b.y = finalY;
-            b.used = true; // mark crystal as used
+            b.used = true; // mark as used
             this.crystalAdded = true;
 
             if (!this.addedIngredients.includes(b.img)) {
@@ -302,7 +306,10 @@ class Level {
             this.checkSequence();
           }
         } else {
-          // --- REGULAR BOTTLE ANIMATION (unchanged) ---
+          // --- REGULAR BOTTLE ANIMATION ---
+          const targetX = layout.cauldron.x - 20;
+          const targetY = layout.cauldron.y - 160;
+
           if (b.progress < 1) {
             b.x = lerp(b.startX, targetX, b.progress);
             b.y = lerp(b.startY, targetY, b.progress);
@@ -331,6 +338,7 @@ class Level {
         }
       }
 
+      // ---- Draw bottle ----
       const bottleWidth = layout.shelf.bottleWidth;
       const bottleHeight = (b.img.height / b.img.width) * bottleWidth;
 
@@ -339,13 +347,11 @@ class Level {
 
       let angle = 0;
       if (!b.isCrystal && b.isMoving && b.progress >= 0.5 && b.progress < 2) {
-        // Only tilt regular bottles
-        angle = PI / 2.5;
+        angle = PI / 2.5; // tilt regular bottles
       }
 
       rotate(angle);
 
-      // Selection outline
       if (b.isSelected) {
         noFill();
         stroke(255);
