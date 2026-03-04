@@ -29,6 +29,7 @@ let potionaryLogo, potionaryLogoDetail, startBg, levelMenu;
 let levelBg, orderSheet, cauldronImg, recipeBookClosed, recipeBookOpen;
 let bottleGreen, bottleRed, bottleBlue, bottleOrange, bottlePink;
 let crystalImg, bowlImg;
+let greenSymbol, blueSymbol, orangeSymbol;
 
 // ------------------------------
 // preload() runs BEFORE setup() to load assets
@@ -56,6 +57,10 @@ function preload() {
 
   crystalImg = loadImage("assets/crystal/crystal-v2.svg");
   bowlImg = loadImage("assets/crystal/bowl.png");
+
+  greenSymbol = loadImage("assets/symbols/green-symbol.svg");
+  blueSymbol = loadImage("assets/symbols/blue-symbol.svg");
+  orangeSymbol = loadImage("assets/symbols/orange-symbol.svg");
 
   levelData = loadJSON("levels.json");
 }
