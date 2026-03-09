@@ -37,6 +37,7 @@ const FONT_MANUFACTURING_CONSENT = "Manufacturing Consent";
 const FONT_IM_FELL_ENGLISH = "IM Fell English";
 const FONT_VT323 = "VT323";
 const FONT_MONSIEUR_LA_DOULAISE = "Monsieur La Doulaise";
+const FONT_VOCES = "Voces";
 
 // ------------------------------
 // preload() runs BEFORE setup() to load assets
@@ -83,6 +84,7 @@ function preload() {
   document.fonts.load('16px "IM Fell English"');
   document.fonts.load('16px "VT323"');
   document.fonts.load('16px "Monsieur La Doulaise"');
+  document.fonts.load('16px "Voces"');
 }
 
 // ------------------------------

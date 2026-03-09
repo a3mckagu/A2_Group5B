@@ -110,27 +110,6 @@ class Level {
     image(this.assets.levelBg, 0, 0, BASE_WIDTH, BASE_HEIGHT);
     imageMode(CENTER);
 
-    // ---- ORDER SHEET ----
-    const o = layout.orderSheet;
-    const oHeight =
-      (this.assets.orderSheet.height / this.assets.orderSheet.width) * o.w;
-    image(this.assets.orderSheet, o.x, o.y, o.w, oHeight);
-
-    // ---- ORDER TEXT ----
-    push();
-    textAlign(LEFT, TOP);
-    textSize(15);
-    fill(0);
-    noStroke();
-    const textPaddingX = -o.w / 2 + 20;
-    const textPaddingY = -oHeight / 2 + 40;
-    text(
-      "Order\n\nCustomer:\nLord Alistair\n\nPotion:\nBeginner's Luck",
-      o.x + textPaddingX,
-      o.y + textPaddingY,
-    );
-    pop();
-
     // ---- BOWL ----
     const b = layout.bowl;
     const bHeight =
@@ -251,10 +230,10 @@ class Level {
       const btnY = bookTop + btnSize / 2;
       push();
       rectMode(CENTER);
-      fill(255, 0, 0);
+      fill("#D00000");
       noStroke();
       rect(btnX, btnY, btnSize, btnSize, 5);
-      fill(255);
+      fill("#FFF4E5");
       textAlign(CENTER, CENTER);
       textSize(16);
       text("X", btnX, btnY);
@@ -429,72 +408,186 @@ class Level {
 
     // ---- ORDER OVERLAY ----
     if (this.isOrderOpen) {
+      // Dim background
       push();
       fill(0, 150);
       rectMode(CORNER);
       rect(0, 0, BASE_WIDTH, BASE_HEIGHT);
       pop();
 
-      // Draw order card
-      const cardWidth = 400;
-      const cardHeight = 500;
+      // Redraw envelope icon on top of dimmed background
       push();
-      rectMode(CENTER);
-      fill(245, 235, 220);
-      stroke(139, 90, 43);
-      strokeWeight(3);
-      rect(BASE_WIDTH / 2, BASE_HEIGHT / 2, cardWidth, cardHeight, 15);
+      translate(env.x, env.y);
+      scale(this.envelopeScale);
+      image(this.assets.envelopeImg, 0, 0, env.w, envHeight);
       pop();
 
-      const cardLeft = BASE_WIDTH / 2 - cardWidth / 2;
-      const cardTop = BASE_HEIGHT / 2 - cardHeight / 2;
+      // Draw notification panel on right side under envelope
+      const panelWidth = 350;
+      const panelHeight = 290;
+      const panelRight = env.x + env.w / 2;
+      const panelTop = env.y + envHeight / 2 + 15;
+      const panelLeft = panelRight - panelWidth;
 
-      // Order content
+      push();
+      rectMode(CORNER);
+      fill("#68452E");
+      noStroke();
+      rect(panelLeft, panelTop, panelWidth, panelHeight, 8);
+      pop();
+
+      // ORDERS label
       push();
       textAlign(LEFT, TOP);
+      textFont("VT323");
       textSize(24);
-      textStyle(BOLD);
-      fill(60, 30, 10);
-      text("Order", cardLeft + 30, cardTop + 30);
+      fill(255);
+      text("ORDERS", panelLeft + 20, panelTop + 15);
+      pop();
 
-      textStyle(NORMAL);
+      // Dividing line
+      push();
+      stroke("#2E1006");
+      strokeWeight(3);
+      strokeCap(SQUARE);
+      line(panelLeft, panelTop + 50, panelLeft + panelWidth, panelTop + 50);
+      pop();
+
+      // Inner order card
+      const cardMargin = 15;
+      const cardLeft = panelLeft + cardMargin;
+      const cardTop = panelTop + 60;
+      const cardWidth = panelWidth - cardMargin * 2;
+      const cardHeight = panelHeight - 75;
+
+      push();
+      rectMode(CORNER);
+      fill("#F5E6D1");
+      noStroke();
+      rect(cardLeft, cardTop, cardWidth, cardHeight, 8);
+      pop();
+
+      // Card heading - "Beginner's Luck"
+      push();
+      textAlign(LEFT, TOP);
+      textFont("Manufacturing Consent");
+      textSize(36);
+      fill("#2D0900");
+      text("Beginner's Luck", cardLeft + 20, cardTop + 20);
+      pop();
+
+      // "From: Lord Alistair"
+      push();
+      textAlign(LEFT, TOP);
+      textFont("IM Fell English");
+      textStyle(ITALIC);
+      textSize(20);
+      fill("#6E6E6E");
+      text("From: Lord Alistair", cardLeft + 20, cardTop + 65);
+      pop();
+
+      // Patience bar (above START ORDER button)
+      const startBtnMargin = 20;
+      const startBtnWidth = cardWidth - startBtnMargin * 2;
+      const barHeight = 16;
+      const barX = cardLeft + startBtnMargin;
+      const barY = cardTop + cardHeight - 36 - 15 - barHeight - 18; // 18px gap above button
+
+      // "CUSTOMER PATIENCE" label
+      push();
+      textAlign(LEFT, BOTTOM);
+      textFont("VT323");
       textSize(16);
-      let textY = cardTop + 80;
-      const lineHeight = 28;
+      fill("#6E6E6E");
+      text("CUSTOMER PATIENCE", barX, barY - 4);
+      pop();
 
-      text("Customer:", cardLeft + 30, textY);
-      textStyle(BOLD);
-      text("Lord Alistair", cardLeft + 120, textY);
-      textStyle(NORMAL);
-      textY += lineHeight * 1.5;
+      // Bar background (light grey - depleted portion)
+      push();
+      rectMode(CORNER);
+      fill("#CCCCCC");
+      noStroke();
+      rect(barX, barY, startBtnWidth, barHeight);
+      pop();
 
-      text("Potion:", cardLeft + 30, textY);
-      textStyle(BOLD);
-      text("Beginner's Luck", cardLeft + 100, textY);
-      textStyle(NORMAL);
-      textY += lineHeight * 2;
+      // Gradient fill (red → yellow → green, left to right)
+      push();
+      noStroke();
+      const gradientSteps = startBtnWidth;
+      for (let i = 0; i < gradientSteps; i++) {
+        const t = i / gradientSteps;
+        let c;
+        if (t < 0.5) {
+          // Red to yellow
+          c = lerpColor(color("#D00000"), color("#FFD700"), t * 2);
+        } else {
+          // Yellow to green
+          c = lerpColor(color("#FFD700"), color("#228B22"), (t - 0.5) * 2);
+        }
+        fill(c);
+        rect(barX + i, barY, 1, barHeight);
+      }
+      pop();
 
-      text("Description:", cardLeft + 30, textY);
-      textY += lineHeight;
-      textSize(14);
-      text("A simple potion to help with fortune", cardLeft + 30, textY);
-      textY += lineHeight * 0.8;
-      text("and bring good luck to the drinker.", cardLeft + 30, textY);
+      // Increment lines (2 minutes = 120 seconds, lines every 30 seconds = 4 segments)
+      push();
+      stroke("#6E6E6E");
+      strokeWeight(1);
+      for (let i = 1; i < 4; i++) {
+        const lineX = barX + (startBtnWidth / 4) * i;
+        line(lineX, barY + 1, lineX, barY + barHeight - 1);
+      }
+      pop();
+
+      // "Start Order" button
+      const startBtnHeight = 36;
+      const startBtnX = cardLeft + startBtnMargin;
+      const startBtnY = cardTop + cardHeight - startBtnHeight - 15;
+
+      // Check if hovering over START ORDER button
+      const isStartBtnHovered =
+        adjustedMX > startBtnX &&
+        adjustedMX < startBtnX + startBtnWidth &&
+        adjustedMY > startBtnY &&
+        adjustedMY < startBtnY + startBtnHeight;
+
+      push();
+      rectMode(CORNER);
+      fill(isStartBtnHovered ? "#4A2010" : "#2E1006");
+      noStroke();
+      rect(startBtnX, startBtnY, startBtnWidth, startBtnHeight, 8);
+      textAlign(CENTER, CENTER);
+      textFont("VT323");
+      textSize(24);
+      fill("#FFF4E5");
+      text(
+        "START ORDER",
+        startBtnX + startBtnWidth / 2,
+        startBtnY + startBtnHeight / 2,
+      );
       pop();
 
       // Close button
-      const btnSize = 30;
-      const btnX = cardLeft + cardWidth - btnSize / 2;
-      const btnY = cardTop + btnSize / 2;
+      const btnSize = 24;
+      const btnX = panelLeft + panelWidth - btnSize / 2 - 8;
+      const btnY = panelTop + btnSize / 2 + 8;
+
+      // Check if hovering over close button
+      const isCloseBtnHovered =
+        adjustedMX > btnX - btnSize / 2 &&
+        adjustedMX < btnX + btnSize / 2 &&
+        adjustedMY > btnY - btnSize / 2 &&
+        adjustedMY < btnY + btnSize / 2;
+
       push();
       rectMode(CENTER);
-      fill(255, 0, 0);
+      fill(isCloseBtnHovered ? "#E83030" : "#D00000");
       noStroke();
       rect(btnX, btnY, btnSize, btnSize, 5);
-      fill(255);
+      fill("#FFF4E5");
       textAlign(CENTER, CENTER);
-      textSize(16);
-      text("X", btnX, btnY);
+      textSize(18);
+      text("×", btnX, btnY);
       pop();
 
       return;
@@ -581,14 +674,21 @@ function levelMousePressed() {
 
   // ---- Order Overlay Close Button ----
   if (levelInstance.isOrderOpen) {
-    const cardWidth = 400;
-    const cardHeight = 500;
-    const cardLeft = BASE_WIDTH / 2 - cardWidth / 2;
-    const cardTop = BASE_HEIGHT / 2 - cardHeight / 2;
+    const env = layout.envelope;
+    const envHeight =
+      (levelInstance.assets.envelopeImg.height /
+        levelInstance.assets.envelopeImg.width) *
+      env.w;
 
-    const btnSize = 30;
-    const btnX = cardLeft + cardWidth - btnSize / 2;
-    const btnY = cardTop + btnSize / 2;
+    // Panel coordinates matching draw code
+    const panelWidth = 350;
+    const panelRight = env.x + env.w / 2;
+    const panelTop = env.y + envHeight / 2 + 15;
+    const panelLeft = panelRight - panelWidth;
+
+    const btnSize = 24;
+    const btnX = panelLeft + panelWidth - btnSize / 2 - 8;
+    const btnY = panelTop + btnSize / 2 + 8;
 
     if (
       adjustedX > btnX - btnSize / 2 &&
@@ -599,6 +699,18 @@ function levelMousePressed() {
       levelInstance.isOrderOpen = false;
       return;
     }
+
+    // Allow clicking envelope to close when open
+    if (
+      adjustedX > env.x - env.w / 2 &&
+      adjustedX < env.x + env.w / 2 &&
+      adjustedY > env.y - envHeight / 2 &&
+      adjustedY < env.y + envHeight / 2
+    ) {
+      levelInstance.isOrderOpen = false;
+      return;
+    }
+
     return; // block clicks behind overlay
   }
 
