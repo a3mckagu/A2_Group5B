@@ -310,31 +310,21 @@ class Level {
       const ringWidth = c.w * 0.4;
       const ringHeight = cHeight * 0.095; // slightly shallower ellipse
 
-      push();
-      translate(c.x, rimY);
-      noFill();
-
-      // Subtle glow behind the ring
-      stroke(200, 165, 50, 110);
-      strokeWeight(5);
-      ellipse(0, 0, ringWidth + 8, ringHeight + 4);
-
-      // Main gold ring (slightly thicker)
-      stroke(255, 215, 90, 230);
-      strokeWeight(3.4);
-      ellipse(0, 0, ringWidth, ringHeight);
-
-      pop();
+      // Golden ring drawing removed — hit area calculations remain active.
       // Update drop zone so it covers a vertical span that starts a bit
       // above the top of the golden ring and ends at the bottom of the ring.
       // We'll represent the zone as an ellipse (rx, ry) so horizontal hits
       // near the ring edges work reliably.
-      const dzExtra = 80; // extra pixels above the ring top to include (a bit taller)
+      const dzExtra = 56; // extra pixels above the ring top to include (shorter)
       const ringTop = rimY - ringHeight / 2;
       const ringBottom = rimY + ringHeight / 2;
       const dzTop = ringTop - dzExtra; // desired top of drop area
       const dzBottom = ringBottom; // desired bottom of drop area
       const dzCenterY = (dzTop + dzBottom) / 2;
+
+      // We'll keep the bottom of the active hit area aligned with the ringBottom
+      // and increase its vertical radius so it extends upward more.
+      const hitCenterY = rimY; // reference (we'll set actual dropZone.y after computing actualRy)
 
       // Base horizontal radius (center), and asymmetric top/bottom radii
       const baseRx = (ringWidth / 2) * 1.15; // horizontal radius (a bit wider than ring)
@@ -345,7 +335,6 @@ class Level {
       const rxBottom = baseRx * 1.35; // wider near the bottom
 
       this.dropZone.x = c.x;
-      this.dropZone.y = dzCenterY;
       this.dropZone.rx = baseRx; // keep a central reference
       this.dropZone.rxTop = rxTop;
       this.dropZone.rxBottom = rxBottom;
@@ -355,21 +344,17 @@ class Level {
       this.dropZone.bottom = dzBottom;
       // keep r for backward compatibility (max radius)
       this.dropZone.r = max(baseRx, ry, rxBottom);
-      // Actual hit radius: use bottom (orange) ellipse but slightly less wide
-      this.dropZone.actualRx = rxBottom * 0.95;
+      // Actual hit area: match the golden ring width/height, centered slightly higher
+      // Make the active hit area wider than the gold ring so it's easier to hit
+      const actualRxMultiplier = 1.25; // 25% wider on each side
+      this.dropZone.actualRx = (ringWidth / 2) * actualRxMultiplier; // horizontal radius from ring width
+      // Increase vertical radius so hit area extends upward while keeping bottom fixed
+      const actualRyMultiplier = 2.2; // increase vertical reach (keep bottom fixed)
+      this.dropZone.actualRy = (ringHeight / 2) * actualRyMultiplier;
+      // Position dropZone.y so bottom of the ellipse matches ringBottom
+      this.dropZone.y = ringBottom - this.dropZone.actualRy;
 
-      // Debug: draw only the actual active hit area (white ellipse)
-      push();
-      noFill();
-      stroke(255, 255, 255, 180);
-      strokeWeight(1.2);
-      ellipse(
-        this.dropZone.x,
-        this.dropZone.y,
-        this.dropZone.actualRx * 2,
-        ry * 2,
-      );
-      pop();
+      // Debug ellipse removed — hit area is now invisible in normal gameplay
     }
 
     // ---- RECIPE BOOK ----
@@ -521,19 +506,22 @@ class Level {
             ? this.dropZone.bottom
             : this.dropZone.y + ry;
 
-        // Use the bottom (orange) ellipse as the authoritative hit radius,
-        // slightly narrowed so the active zone is a bit smaller than the visual orange ring.
+        // Use the white hit ellipse (matching the ring) when available
         const effectiveRx =
           this.dropZone.actualRx ||
           rxBottom ||
           this.dropZone.rx ||
           this.dropZone.r ||
           0;
+        const effectiveRy =
+          this.dropZone.actualRy || ry || this.dropZone.r || 0;
 
         const insideEllipse =
           effectiveRx > 0 &&
-          ry > 0 &&
-          (dx * dx) / (effectiveRx * effectiveRx) + (dy * dy) / (ry * ry) <= 1;
+          effectiveRy > 0 &&
+          (dx * dx) / (effectiveRx * effectiveRx) +
+            (dy * dy) / (effectiveRy * effectiveRy) <=
+            1;
 
         if (insideEllipse) {
           // Auto-drop: bottle pours in place, then returns to shelf
@@ -659,20 +647,34 @@ class Level {
 
       let angle = 0;
       if (!vial.isCrystal && vial.isMoving) {
-        const baseTilt = PI / 2.5;
+        const baseTilt = PI / 3.5;
         const isRightSide = this.dropZone ? vial.x > this.dropZone.x : false;
         const tilt = isRightSide ? -baseTilt : baseTilt;
 
         if (vial.droppedFromHeld && vial.progress < 1.5) {
-          // Tilt during pour phase (tilt direction depends on side of drop zone)
-          angle = tilt;
+          // Smoothly ramp into the tilt over the first portion of the pour
+          const rampDuration = 0.6; // progress range used to reach full tilt
+          const t = constrain(vial.progress / rampDuration, 0, 1);
+          const eased = sin((t * PI) / 2); // ease-out
+          angle = tilt * eased;
         } else if (
           !vial.droppedFromHeld &&
           vial.progress >= 0.5 &&
           vial.progress < 2
         ) {
-          // Original tilt during move + pour + return (after moving to cauldron)
-          angle = tilt;
+          // Ramp from 0 to full tilt between progress 0.5 -> 1.0, then hold
+          const rampStart = 0.5;
+          const rampEnd = 1.0;
+          let t = 1;
+          if (vial.progress < rampEnd) {
+            t = constrain(
+              (vial.progress - rampStart) / (rampEnd - rampStart),
+              0,
+              1,
+            );
+            t = sin((t * PI) / 2);
+          }
+          angle = tilt * t;
         }
       }
 
