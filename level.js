@@ -21,7 +21,7 @@ const layout = {
   // nudged left a bit to balance layout
   crystal: { x: 820, y: 455, w: 36 },
   orderSheet: { x: 940, y: 210, w: 150 },
-  bowl: { x: 820, y: 500, w: 140 },
+  bowl: { x: 840, y: 500, w: 95 },
   envelope: { x: 1100, y: 50, w: 50 },
 
   shelf: {
@@ -104,11 +104,11 @@ class Level {
         colour: "midblue",
       },
       {
-        id: "closedOrange",
+        id: "lightorange",
         img: assets.bottleClosedOrange,
         openImg: assets.bottleOpenOrange,
         symbol: assets.orangeSymbol,
-        colour: "closedOrange",
+        colour: "lightorange",
       },
       {
         id: "teal",
@@ -133,6 +133,17 @@ class Level {
       },
     ];
 
+    // Randomize vial order so shelf layout changes each run
+    const shuffleArray = (arr) => {
+      for (let i = arr.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        const tmp = arr[i];
+        arr[i] = arr[j];
+        arr[j] = tmp;
+      }
+    };
+    shuffleArray(vialsConfig);
+
     // Initialize vials array with runtime state
     this.vials = [];
     const maxPerRow = 4; // max bottles per row
@@ -153,29 +164,22 @@ class Level {
 
     const rowGap = layout.shelf.rowSpacing || 20;
 
-    vialsConfig.forEach((config, i) => {
-      let x, y, w, h;
+    // Ensure crystal is excluded from shelf placement so the shelf always
+    // contains exactly 3 rows of 4 bottles (12 slots). Position the crystal
+    // separately at its dedicated layout location.
+    const nonCrystalConfigs = vialsConfig.filter((c) => !c.isCrystal);
+    const crystalConfig = vialsConfig.find((c) => c.isCrystal);
 
-      if (config.isCrystal) {
-        // Crystal position from layout
-        const cr = layout.crystal;
-        w = cr.w;
-        h = (config.img.height / config.img.width) * w;
-        x = cr.x;
-        y = cr.y;
-      } else {
-        // Regular bottles positioned on shelf (allow per-vial override)
-        w = config.overrideWidth || layout.shelf.bottleWidth;
-        h = (config.img.height / config.img.width) * w;
+    nonCrystalConfigs.forEach((config, idx) => {
+      const w = config.overrideWidth || layout.shelf.bottleWidth;
+      const h = (config.img.height / config.img.width) * w;
 
-        const row = Math.floor(i / maxPerRow);
-        const col = i % maxPerRow;
+      const row = Math.floor(idx / maxPerRow);
+      const col = idx % maxPerRow;
 
-        x = layout.shelf.x + col * layout.shelf.spacing;
-        // Use uniform rowHeight + rowGap for even spacing, and vertically
-        // center bottles that are shorter than the row cell.
-        y = layout.shelf.y + row * (rowHeight + rowGap) + (rowHeight - h) / 2;
-      }
+      const x = layout.shelf.x + col * layout.shelf.spacing;
+      const y =
+        layout.shelf.y + row * (rowHeight + rowGap) + (rowHeight - h) / 2;
 
       this.vials.push({
         ...config,
@@ -199,6 +203,38 @@ class Level {
         pourY: 0,
       });
     });
+
+    // Add crystal vial last (positioned from layout.crystal). If not present,
+    // nothing is pushed.
+    if (crystalConfig) {
+      const cr = layout.crystal;
+      const w = cr.w;
+      const h = (crystalConfig.img.height / crystalConfig.img.width) * w;
+      const x = cr.x;
+      const y = cr.y;
+
+      this.vials.push({
+        ...crystalConfig,
+        closedImg: crystalConfig.img,
+        openImg: crystalConfig.openImg || crystalConfig.img,
+        x,
+        y,
+        startX: x,
+        startY: y,
+        width: w,
+        height: h,
+        isSelected: false,
+        isMoving: false,
+        progress: 0,
+        used: false,
+        isHeld: false,
+        scale: 1.0,
+        targetScale: 1.0,
+        droppedFromHeld: false,
+        pourX: 0,
+        pourY: 0,
+      });
+    }
 
     // For backwards compatibility, alias to bottles
     this.bottles = this.vials;
@@ -325,10 +361,8 @@ class Level {
       pop();
     }
 
-    // ---- BOWL ----
+    // ---- BOWL (unified top + bottom) ----
     const b = layout.bowl;
-    const bHeight =
-      (this.assets.bowlImg.height / this.assets.bowlImg.width) * b.w;
 
     // Align bottom of bowl with bottom of recipe book
     const rb = layout.recipeBook;
@@ -336,28 +370,39 @@ class Level {
       (this.assets.recipeBookClosed.height /
         this.assets.recipeBookClosed.width) *
       rb.w;
-    const desiredBowlY = rb.y + rbHeight / 2 - bHeight / 2;
 
-    image(this.assets.bowlImg, b.x, desiredBowlY, b.w, bHeight);
+    // Calculate heights for both pieces from aspect ratios and shared width
+    const bowlBottomHeight =
+      (this.assets.bowlImg.height / this.assets.bowlImg.width) * b.w;
+    const bowlTopHeight =
+      (this.assets.bowlTopImg.height / this.assets.bowlTopImg.width) * b.w;
+
+    // Compute bottom position (source of truth), then derive top position
+    const desiredBowlY = rb.y + rbHeight / 2 - bowlBottomHeight / 2;
+    // Place the top piece so its bottom edge meets the top edge of the bottom piece.
+    // For CENTER image mode: topCenterY + topHeight/2 = bottomCenterY - bottomHeight/2
+    const bowlTopY = desiredBowlY - (bowlBottomHeight / 2 + bowlTopHeight / 2);
+
+    // Draw bowl-top first (in front order)
+    image(this.assets.bowlTopImg, b.x, bowlTopY, b.w, bowlTopHeight);
 
     // Keep crystal positioned relative to the bowl when not moving
     const crystalYOffset = layout.bowl.y - layout.crystal.y; // original offset
     const crystalVial = this.vials.find((v) => v.isCrystal);
     if (crystalVial && !crystalVial.isMoving) {
       crystalVial.x = b.x;
-      crystalVial.y = desiredBowlY - crystalYOffset;
+      // Nudge the crystal slightly downward so it visually sits
+      // a bit lower between the bowl halves.
+      crystalVial.y = desiredBowlY - crystalYOffset + 8;
       crystalVial.startX = crystalVial.x;
       crystalVial.startY = crystalVial.y;
     }
 
-    // ---- CRYSTAL — draw BEHIND cauldron only during the drop phase ----
+    // ---- CRYSTAL — draw between bowl-top and bowl-bottom during the drop phase ----
     const crystal = this.bottles.find((b) => b.isCrystal);
-    if (
-      crystal &&
-      !crystal.used &&
-      crystal.isMoving &&
-      crystal.progress >= 0.6
-    ) {
+    // Always draw the crystal between the bowl top and bottom when it's
+    // present and not yet used (i.e. not inside the cauldron).
+    if (crystal && !crystal.used) {
       const cw = layout.crystal.w;
       const ch = (crystal.img.height / crystal.img.width) * cw;
       push();
@@ -366,6 +411,9 @@ class Level {
       image(crystal.img, 0, 0, cw, ch);
       pop();
     }
+
+    // Draw bowl-bottom last (behind crystal)
+    image(this.assets.bowlImg, b.x, desiredBowlY, b.w, bowlBottomHeight);
 
     // ---- CAULDRON ----
     const c = layout.cauldron;
@@ -739,12 +787,9 @@ class Level {
 
       // ---- Draw vial ----
 
-      // Skip crystal during drop phase — already drawn behind cauldron above
-      if (vial.isCrystal && !vial.used && vial.isMoving && vial.progress >= 0.6)
-        return;
-
-      // Don't draw crystal once it's fully inside the cauldron
-      if (vial.isCrystal && vial.used) return;
+      // Crystal is drawn between the bowl halves above; skip any
+      // additional drawing for crystal here (both moving and static).
+      if (vial.isCrystal) return;
 
       // ---- LIQUID STREAM during pour (drawn behind the vial)
       // Draw a natural-looking liquid stream when bottle is tilted and pouring
@@ -818,7 +863,7 @@ class Level {
             lightpurple: color("#7474B9"),
             lightred: color("#BE272C"),
             midblue: color("#5388C5"),
-            closedOrange: color("#FD9D07"),
+            lightorange: color("#FD9D07"),
             teal: color("#1F8087"),
             yellow: color("#EFD000"),
           };

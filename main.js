@@ -33,7 +33,7 @@ let levelBg,
   recipeBookClosed,
   recipeBookOpen;
 let bottleGreen, bottleRed, bottleBlue, bottleOrange, bottlePink;
-let crystalImg, bowlImg, envelopeImg;
+let crystalImg, bowlTopImg, bowlImg, envelopeImg;
 let greenSymbol, blueSymbol, orangeSymbol;
 let mapIcon1, mapIcon2, mapIcon3, mapIcon4;
 
@@ -72,7 +72,7 @@ function preload() {
   bottleLightpurple = loadImage("assets/vials/closed-lightpurple.svg");
   bottleLightred = loadImage("assets/vials/closed-lightred.svg");
   bottleMidblue = loadImage("assets/vials/closed-midblue.svg");
-  bottleClosedOrange = loadImage("assets/vials/closed-orange.svg");
+  bottleClosedOrange = loadImage("assets/vials/closed-lightorange.svg");
   bottleTeal = loadImage("assets/vials/closed-teal.svg");
   bottleYellow = loadImage("assets/vials/closed-yellow.svg");
 
@@ -91,7 +91,8 @@ function preload() {
   bottleOpenYellow = loadImage("assets/vials/open-yellow.svg");
 
   crystalImg = loadImage("assets/crystal/crystal-v2.svg");
-  bowlImg = loadImage("assets/crystal/bowl.png");
+  bowlTopImg = loadImage("assets/crystal/bowl-top.png");
+  bowlImg = loadImage("assets/crystal/bowl-bottom.png");
   envelopeImg = loadImage("assets/order/envelope.png");
 
   greenSymbol = loadImage("assets/symbols/green-symbol.svg");
@@ -154,6 +155,7 @@ function setup() {
     bottleOpenTeal,
     bottleOpenYellow,
     crystalImg,
+    bowlTopImg,
     bowlImg,
     envelopeImg,
     greenSymbol,
