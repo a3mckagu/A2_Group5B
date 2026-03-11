@@ -627,18 +627,26 @@ class Level {
     image(this.assets.recipeBookClosed, r.x, r.y, r.w, rHeight);
 
     // ---- Bottles (Vials) ----
+    // Determine if any vial is currently held so we can suppress
+    // hover effects and defer drawing the held vial on top.
+    const anyVialHeld = this.vials.some((v) => v.isHeld);
     this.vials.forEach((vial) => {
-      // Update held bottle position to follow mouse in real-time
+      // Update held bottle position to follow mouse in real-time (smooth)
       if (vial.isHeld && !vial.isMoving) {
         const { scaleFactor, offsetX, offsetY } = getScaleAndOffset();
         const mx = (mouseX - offsetX) / scaleFactor;
         const my = (mouseY - offsetY) / scaleFactor;
-        vial.x = mx;
-        vial.y = my;
+
+        // Smoothly follow the cursor to avoid snapping (still centers on cursor over time)
+        const followSpeed = 0.28; // larger -> snappier, smaller -> more float
+        vial.x = lerp(vial.x, mx, followSpeed);
+        vial.y = lerp(vial.y, my, followSpeed);
+
+        // Use the immediate mouse position for hit detection so auto-drop isn't delayed
+        const hitX = mx;
+        const hitY = my;
 
         // Check if held bottle is inside the (asymmetric) drop zone — auto-trigger pour
-        const dx = vial.x - this.dropZone.x;
-        const dy = vial.y - this.dropZone.y;
         const rxTop =
           this.dropZone.rxTop || this.dropZone.rx || this.dropZone.r || 0;
         const rxBottom =
@@ -670,20 +678,20 @@ class Level {
         const insideRect =
           halfW > 0 &&
           halfH > 0 &&
-          vial.x >= left &&
-          vial.x <= right &&
-          vial.y >= top &&
-          vial.y <= bottom;
+          hitX >= left &&
+          hitX <= right &&
+          hitY >= top &&
+          hitY <= bottom;
 
         if (insideRect) {
           // Auto-drop: bottle pours in place, then returns to shelf
           vial.droppedFromHeld = true;
-          vial.pourX = vial.x;
+          vial.pourX = vial.x; // use current (lerped) visual position for pour
           vial.pourY = vial.y;
           vial.isMoving = true;
           vial.isHeld = false;
-          // keep the picked-up scale while pouring
-          vial.targetScale = 1.15;
+          // keep the picked-up scale while pouring (reduced)
+          vial.targetScale = 1.08;
           vial.progress = 0;
         }
       }
@@ -705,6 +713,7 @@ class Level {
       const isHoverV =
         !vial.isHeld &&
         !vial.isMoving &&
+        !anyVialHeld && // suppress other vial hover while one is held
         adjustedMX_v > vial.x - halfW_v &&
         adjustedMX_v < vial.x + halfW_v &&
         adjustedMY_v > vial.y - halfH_v &&
@@ -815,6 +824,10 @@ class Level {
       // Crystal is drawn between the bowl halves above; skip any
       // additional drawing for crystal here (both moving and static).
       if (vial.isCrystal) return;
+
+      // If this vial is currently held, skip drawing here so we can
+      // render it later on top of UI elements (envelope, badges).
+      if (vial.isHeld) return;
 
       // ---- LIQUID STREAM during pour (drawn behind the vial)
       // Draw a natural-looking liquid stream when bottle is tilted and pouring
@@ -1064,6 +1077,8 @@ class Level {
       pop();
     });
 
+    // (Held vial is drawn later so it can appear above UI elements)
+
     // Show result
     if (this.levelResult) {
       push();
@@ -1079,11 +1094,12 @@ class Level {
     const envHeight =
       (this.assets.envelopeImg.height / this.assets.envelopeImg.width) * env.w;
 
-    // Check if mouse is hovering over envelope
+    // Check if mouse is hovering over envelope. Suppress hover while a vial is held.
     const { scaleFactor, offsetX, offsetY } = getScaleAndOffset();
     const adjustedMX = (mouseX - offsetX) / scaleFactor;
     const adjustedMY = (mouseY - offsetY) / scaleFactor;
     const isEnvHovered =
+      !anyVialHeld &&
       adjustedMX > env.x - env.w / 2 &&
       adjustedMX < env.x + env.w / 2 &&
       adjustedMY > env.y - envHeight / 2 &&
@@ -1125,6 +1141,18 @@ class Level {
       textSize(18);
       textStyle(BOLD);
       text("1", badgeX, badgeY);
+      pop();
+    }
+
+    // ---- Draw held vial above envelope/badge (normal state) ----
+    const heldVial = this.vials.find((v) => v.isHeld && !v.isCrystal);
+    if (heldVial && !this.isOrderOpen) {
+      push();
+      const drawY = heldVial.y + (heldVial.lift || 0);
+      translate(heldVial.x, drawY);
+      scale(heldVial.scale);
+      noStroke();
+      image(heldVial.img, 0, 0, heldVial.width, heldVial.height);
       pop();
     }
 
@@ -1348,6 +1376,24 @@ class Level {
         pop();
       }
 
+      // If a vial is held, draw it above the overlay elements so it remains visible
+      const heldVialOverlay = this.vials.find((v) => v.isHeld && !v.isCrystal);
+      if (heldVialOverlay) {
+        push();
+        const drawY = heldVialOverlay.y + (heldVialOverlay.lift || 0);
+        translate(heldVialOverlay.x, drawY);
+        scale(heldVialOverlay.scale);
+        noStroke();
+        image(
+          heldVialOverlay.img,
+          0,
+          0,
+          heldVialOverlay.width,
+          heldVialOverlay.height,
+        );
+        pop();
+      }
+
       return;
     }
   }
@@ -1434,7 +1480,7 @@ function levelMousePressed() {
       vial.isHeld = true;
       // swap to open asset and slightly enlarge while held
       vial.img = vial.openImg || vial.closedImg;
-      vial.targetScale = 1.15;
+      vial.targetScale = 1.08;
     } else {
       vial.isSelected = false;
     }
