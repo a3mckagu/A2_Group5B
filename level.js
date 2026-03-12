@@ -1651,6 +1651,8 @@ class Level {
     fill(96, 56, 19, 120);
     text("A misstep cannot be undone.", leftPageCX, _warnRuleY - 16);
 
+    // (Right-page warning will be rendered below after diagram coords are set)
+
     // ---- Pentagon diagram on right page ----
     // All coordinates are in BASE_WIDTH / BASE_HEIGHT space.
     // Diagram centroid sits at (726, 298) — right half of the open book.
@@ -1661,6 +1663,17 @@ class Level {
     const INNER_R = 36; // inner ring radius
     const SYM = 28; // symbol render size (square)
     const LABEL_ALPHA = 200; // opacity for flavour text (0-255)
+
+    // ---- Right page bottom warning (aligned with "Nearly there.") ----
+    textFont(FONT_IM_FELL_ENGLISH);
+    textStyle(ITALIC);
+    textSize(12);
+    textAlign(CENTER, TOP);
+    fill(96, 56, 19, 175);
+    // Align X with the 'Nearly there.' label at 726 + SHIFT_X
+    const rightWarnX = 726 + SHIFT_X;
+    text("Activate with Catalyst Crystal", rightWarnX, _warnRuleY - 27);
+    textStyle(NORMAL);
 
     // Vial images mapped to each vertex (clockwise from 3-o'clock)
     // right=lightred(Last vial), lower-right=lightgreen(Begin here),
@@ -1990,9 +2003,9 @@ function levelMousePressed() {
     const bookLeft = BASE_WIDTH / 2 - bookWidth / 2;
     const bookTop = BASE_HEIGHT / 2 - bookHeight / 2;
 
-    const btnSize = 30;
-    const btnX = bookLeft + bookWidth - btnSize / 2;
-    const btnY = bookTop + btnSize / 2;
+    const btnSize = 36;
+    const btnX = bookLeft + bookWidth - btnSize / 2 + 32;
+    const btnY = bookTop + btnSize / 2 - 26;
 
     if (
       adjustedX > btnX - btnSize / 2 &&
