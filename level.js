@@ -571,9 +571,16 @@ class Level {
       return;
     }
 
+    // ---- Bottles (Vials) ----
+    // Determine if any vial is currently held or active (moving/pouring)
+    // so we can suppress hover effects and defer drawing the held vial on top.
+    const anyVialHeld = this.vials.some((v) => v.isHeld);
+    const anyVialActive = this.vials.some((v) => v.isMoving);
+
     // Draw closed book with smooth hover lift (visual only; click area unchanged)
     let desiredLift = 0;
-    if (!paused) {
+    // Don't lift the book while interacting with a vial/crystal or when paused
+    if (!paused && !anyVialHeld && !anyVialActive && !this.crystalAdded) {
       const { scaleFactor, offsetX, offsetY } = getScaleAndOffset();
       const adjustedMX = (mouseX - offsetX) / scaleFactor;
       const adjustedMY = (mouseY - offsetY) / scaleFactor;
@@ -599,12 +606,6 @@ class Level {
       r.w,
       rHeight,
     );
-
-    // ---- Bottles (Vials) ----
-    // Determine if any vial is currently held or active (moving/pouring)
-    // so we can suppress hover effects and defer drawing the held vial on top.
-    const anyVialHeld = this.vials.some((v) => v.isHeld);
-    const anyVialActive = this.vials.some((v) => v.isMoving);
     this.vials.forEach((vial) => {
       // When paused, skip state-updates (movement, input handling)
       if (!paused) {

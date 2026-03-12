@@ -495,6 +495,14 @@ const Results = {
       if (typeof recipeBookBg !== "undefined") {
         levelInstance.assets.recipeBookBg = recipeBookBg;
       }
+      // Reattach symbol assets used by the recipe diagram (matches setup())
+      if (typeof symbolBlack !== "undefined") {
+        levelInstance.assets.symbolBlack = symbolBlack;
+        levelInstance.assets.symbolLightgreen = symbolLightgreen;
+        levelInstance.assets.symbolLightpurple = symbolLightpurple;
+        levelInstance.assets.symbolMidblue = symbolMidblue;
+        levelInstance.assets.symbolRed = symbolRed;
+      }
       return;
     }
 
