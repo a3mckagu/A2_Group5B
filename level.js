@@ -209,7 +209,8 @@ class Level {
     // nothing is pushed.
     if (crystalConfig) {
       const cr = layout.crystal;
-      const w = cr.w;
+      // Slightly reduce crystal size for better visual fit
+      const w = cr.w * 0.85;
       const h = (crystalConfig.img.height / crystalConfig.img.width) * w;
       const x = cr.x;
       const y = cr.y;
@@ -248,12 +249,43 @@ class Level {
     this.envelopeScale = 1;
     this.orderStarted = false;
 
+    // Customer patience timer (starts when level first draws)
+    this.patienceDuration = 120000; // 2 minutes in ms
+    this.patienceStart = null; // set on first draw()
+    this.patiencePaused = false;
+    this.patienceElapsedAtPause = 0;
+    this.patienceDisplayFrac = 1; // visual smoothing
+    this._patienceGradientCache = {}; // cache gradient graphics by width+height
+
+    // Return a cached gradient p5.Graphics of given size (creates if missing)
+    this._getPatienceGradient = (width, height) => {
+      const key = width + "x" + height;
+      if (this._patienceGradientCache[key])
+        return this._patienceGradientCache[key];
+      const g = createGraphics(width, height);
+      g.noStroke();
+      for (let i = 0; i < width; i++) {
+        const t = i / width;
+        let c;
+        if (t < 0.5) {
+          c = lerpColor(g.color("#D00000"), g.color("#FFD700"), t * 2);
+        } else {
+          c = lerpColor(g.color("#FFD700"), g.color("#228B22"), (t - 0.5) * 2);
+        }
+        g.fill(c);
+        g.rect(i, 0, 1, height);
+      }
+      this._patienceGradientCache[key] = g;
+      return g;
+    };
     // --- SEQUENCE TRACKING ---
     this.addedIngredients = [];
     this.correctOrder = [
-      assets.bottleGreen,
-      assets.bottleBlue,
-      assets.bottleOrange,
+      assets.bottleLightgreen,
+      assets.bottleMidblue,
+      assets.bottleBlack,
+      assets.bottleLightpurple,
+      assets.bottleLightred,
     ];
     this.levelResult = null; // "CORRECT" or "WRONG"
     this.crystalAdded = false; // Track whether the crystal has been added to cauldron
@@ -278,6 +310,29 @@ class Level {
     imageMode(CORNER);
     image(this.assets.levelBg, 0, 0, BASE_WIDTH, BASE_HEIGHT);
     imageMode(CENTER);
+
+    // Initialize patience timer when level first draws
+    if (this.patienceStart === null || this.patienceStart === undefined) {
+      this.patienceStart = millis();
+    }
+    let patienceElapsed;
+    if (this.patiencePaused) {
+      patienceElapsed = this.patienceElapsedAtPause || 0;
+    } else {
+      patienceElapsed = millis() - (this.patienceStart || 0);
+    }
+    const patienceFrac = constrain(
+      1 - patienceElapsed / (this.patienceDuration || 120000),
+      0,
+      1,
+    );
+    // Smooth the displayed fraction for a less choppy animation
+    this.patienceDisplayFrac = lerp(
+      this.patienceDisplayFrac || 1,
+      patienceFrac,
+      0.08,
+    );
+    const displayFrac = this.patienceDisplayFrac;
 
     // ---- ORDER SHEET (shown after START ORDER is clicked) ----
     if (this.orderStarted) {
@@ -336,20 +391,16 @@ class Level {
       rect(barX, barY, barWidth, barHeight);
       pop();
 
-      // Gradient fill (red → yellow → green)
+      // Gradient fill (red → yellow → green) rendered from a cached graphic
       push();
+      imageMode(CORNER);
+      const g = this._getPatienceGradient(barWidth, barHeight);
+      image(g, barX, barY);
+      // overlay depleted area with background color using fractional width
+      const filledWFloat = Math.max(0, barWidth * displayFrac);
+      fill("#CCCCCC");
       noStroke();
-      for (let i = 0; i < barWidth; i++) {
-        const t = i / barWidth;
-        let c;
-        if (t < 0.5) {
-          c = lerpColor(color("#D00000"), color("#FFD700"), t * 2);
-        } else {
-          c = lerpColor(color("#FFD700"), color("#228B22"), (t - 0.5) * 2);
-        }
-        fill(c);
-        rect(barX + i, barY, 1, barHeight);
-      }
+      rect(barX + filledWFloat, barY, barWidth - filledWFloat, barHeight);
       pop();
 
       // Segment lines
@@ -386,7 +437,7 @@ class Level {
     // Keep crystal positioned relative to the bowl when not moving
     const crystalYOffset = layout.bowl.y - layout.crystal.y; // original offset
     const crystalVial = this.vials.find((v) => v.isCrystal);
-    if (crystalVial && !crystalVial.isMoving) {
+    if (crystalVial && !crystalVial.isMoving && !crystalVial.isHeld) {
       crystalVial.x = b.x;
       // Place crystal slightly above the bowl center based on original offset
       // Nudge slightly upward for finer alignment
@@ -395,17 +446,11 @@ class Level {
       crystalVial.startY = crystalVial.y;
     }
 
-    // ---- CRYSTAL — draw on top of bowl during the drop phase ----
-    const crystal = this.bottles.find((b) => b.isCrystal);
-    if (crystal && !crystal.used) {
-      const cw = layout.crystal.w;
-      const ch = (crystal.img.height / crystal.img.width) * cw;
-      push();
-      translate(crystal.x, crystal.y);
-      noStroke();
-      image(crystal.img, 0, 0, cw, ch);
-      pop();
-    }
+    // ---- CRYSTAL ----
+    // The crystal is included in `this.vials` so it will be handled by
+    // the main vial loop (hover, click, move, draw). Previously we drew
+    // it separately; that special-case is removed so the crystal behaves
+    // like any other vial for interaction.
 
     // ---- CAULDRON ----
     const c = layout.cauldron;
@@ -450,8 +495,10 @@ class Level {
       // sits exactly at the previous ellipse bottom: centerY = ellipseBottom
       const semiCenterY = ellipseBottom;
 
+      // Nudge the interactive hit area slightly lower for better alignment
+      const hitTestShift = 12; // px downward
       this.dropZone.x = c.x;
-      this.dropZone.y = semiCenterY; // oval center
+      this.dropZone.y = semiCenterY + hitTestShift; // oval center (shifted)
       // store radii for ellipse checks and compatibility
       this.dropZone.actualRx = semiRx;
       this.dropZone.actualRy = semiRy;
@@ -466,7 +513,19 @@ class Level {
       this.dropZone.ringHeight = ringHeight;
       this.dropZone.r = max(semiRx, semiRy);
 
-      // Debug shapes removed.
+      // Crystal hitbox: bottom arc matches the orange ring arc exactly.
+      // The arc center and radii are identical to the ring arc. Above the arc
+      // center, the hit zone extends upward by crystalExtendUp pixels (rectangle).
+      const crystalArcCx = c.x;
+      const crystalArcCy = ringBottom - ringHeight / 2; // same as arcCenterY / ring arc center
+      const crystalRx = ringWidth / 2; // match ring arc rx so sides align with ring bottom arc
+      const crystalRy = ringHeight / 2; // match ring arc ry exactly
+      const crystalExtendUp = 55; // how many px above arc center the flat top sits
+      this.dropZone.crystalRx = crystalRx;
+      this.dropZone.crystalRy = crystalRy;
+      this.dropZone.crystalCx = crystalArcCx;
+      this.dropZone.crystalCy = crystalArcCy + hitTestShift;
+      this.dropZone.crystalExtendUp = crystalExtendUp;
     }
 
     // ---- RECIPE BOOK ----
@@ -604,7 +663,7 @@ class Level {
         const my = (mouseY - offsetY) / scaleFactor;
 
         // Smoothly follow the cursor to avoid snapping (still centers on cursor over time)
-        const followSpeed = 0.9; // larger -> snappier, smaller -> more float
+        const followSpeed = 0.94; // larger -> snappier, smaller -> more float
         vial.x = lerp(vial.x, mx, followSpeed);
         vial.y = lerp(vial.y, my, followSpeed);
 
@@ -618,36 +677,62 @@ class Level {
         const prevMx = (pmouseX - ox2) / sf2;
         const prevMy = (pmouseY - oy2) / sf2;
 
-        const eCx = this.dropZone.x;
-        const eCy = this.dropZone.y; // center of flattened ellipse
-        const rx =
+        // Default to the semi-oval/vial hitbox
+        let eCx = this.dropZone.x;
+        let eCy = this.dropZone.y; // center of semi-oval by default
+        let rx =
           this.dropZone.actualRx ||
-          this.dropZone.radius ||
+          this.dropZone.radiusX ||
           this.dropZone.r ||
           0;
-        const ry =
+        let ry =
           this.dropZone.actualRy ||
-          this.dropZone.radius ||
+          this.dropZone.radiusY ||
           this.dropZone.r ||
           0;
+        // If the held vial is the crystal, use the crystal-specific oval
+        if (vial.isCrystal && this.dropZone.crystalRx !== undefined) {
+          eCx = this.dropZone.crystalCx;
+          eCy = this.dropZone.crystalCy;
+          rx = this.dropZone.crystalRx;
+          ry = this.dropZone.crystalRy;
+        }
 
-        // Semicircular-ellipse (top half) hit test: (dx/rx)^2 + (dy/ry)^2 <= 1 AND sampleY <= centerY
-        const STEPS = 10;
+        // Helper: is a single point inside the active drop zone?
+        const pointInZone = (px, py) => {
+          const pdx = (px - eCx) / rx;
+          const pdy = (py - eCy) / ry;
+          const inEllipse = rx > 0 && ry > 0 && pdx * pdx + pdy * pdy <= 1;
+          if (vial.isCrystal) {
+            const extendUp = this.dropZone.crystalExtendUp || 0;
+            const inArc = inEllipse && py >= eCy;
+            const inRect =
+              Math.abs(px - eCx) <= rx && py >= eCy - extendUp && py <= eCy;
+            return inArc || inRect;
+          }
+          return inEllipse && py <= eCy;
+        };
+
         let insideRect = false;
-        for (let i = 0; i <= STEPS; i++) {
-          const t = i / STEPS;
-          const sampleX = lerp(prevMx, mx, t);
-          const sampleY = lerp(prevMy, my, t);
-          const ndx = (sampleX - eCx) / rx;
-          const ndy = (sampleY - eCy) / ry;
-          if (
-            rx > 0 &&
-            ry > 0 &&
-            ndx * ndx + ndy * ndy <= 1 &&
-            sampleY <= eCy
-          ) {
-            insideRect = true;
-            break;
+        if (vial.isCrystal) {
+          // Require the bottom three points of the crystal bounding box to be
+          // inside the zone — bottom-left, bottom-center, bottom-right.
+          // The top of the crystal can stick out above the rim naturally.
+          const hw = (vial.width * vial.scale) / 2;
+          const hh = (vial.height * vial.scale) / 2;
+          insideRect =
+            pointInZone(vial.x - hw, vial.y + hh) && // bottom-left
+            pointInZone(vial.x, vial.y + hh) && // bottom-center
+            pointInZone(vial.x + hw, vial.y + hh); // bottom-right
+        } else {
+          // Vials: sample points along the mouse path
+          const STEPS = 10;
+          for (let i = 0; i <= STEPS; i++) {
+            const t = i / STEPS;
+            if (pointInZone(lerp(prevMx, mx, t), lerp(prevMy, my, t))) {
+              insideRect = true;
+              break;
+            }
           }
         }
 
@@ -659,10 +744,14 @@ class Level {
           vial.pourY = vial.y;
           vial.isMoving = true;
           vial.isHeld = false;
-          vial.targetScale = 1.08;
+          vial.targetScale = vial.isCrystal ? 1.18 : 1.08;
           vial.progress = 0;
           // Lock the stream end point so it never jumps during the animation
           vial.lockedStreamEndX = null; // will be set on first draw frame
+          if (vial.isCrystal) {
+            this.patiencePaused = true;
+            this.patienceElapsedAtPause = millis() - (this.patienceStart || 0);
+          }
         }
       }
 
@@ -710,24 +799,45 @@ class Level {
           const pauseY = layout.cauldron.y - cauldronHeight / 2 - 90;
           const finalY = layout.cauldron.y + cauldronHeight / 4;
 
-          if (vial.progress < 0.6) {
-            const t = vial.progress / 0.6;
-            vial.x = lerp(vial.startX, targetX, t);
-            vial.y = lerp(vial.startY, pauseY, t);
-          } else if (vial.progress < 1) {
-            const t = (vial.progress - 0.6) / 0.4;
-            vial.x = targetX;
-            vial.y = lerp(pauseY, finalY, t);
-          } else {
-            vial.isMoving = false;
-            vial.isSelected = false;
-            vial.progress = 0;
-            vial.x = targetX;
-            vial.y = finalY;
-            vial.used = true;
-            this.crystalAdded = true;
+          if (vial.droppedFromHeld) {
+            // If crystal was dropped from the user's hand, fall straight down
+            // from the visual pour X position; only interpolate Y towards finalY.
+            if (vial.progress < 1) {
+              const t = constrain(vial.progress, 0, 1);
+              vial.x = vial.pourX; // keep X fixed at drop point
+              vial.y = lerp(vial.pourY, finalY, t);
+            } else {
+              vial.isMoving = false;
+              vial.isSelected = false;
+              vial.progress = 0;
+              vial.x = vial.pourX;
+              vial.y = finalY;
+              vial.used = true;
+              this.crystalAdded = true;
 
-            this.checkSequence();
+              this.checkSequence();
+            }
+          } else {
+            // Original flow when crystal is triggered by non-held action
+            if (vial.progress < 0.6) {
+              const t = vial.progress / 0.6;
+              vial.x = lerp(vial.startX, targetX, t);
+              vial.y = lerp(vial.startY, pauseY, t);
+            } else if (vial.progress < 1) {
+              const t = (vial.progress - 0.6) / 0.4;
+              vial.x = targetX;
+              vial.y = lerp(pauseY, finalY, t);
+            } else {
+              vial.isMoving = false;
+              vial.isSelected = false;
+              vial.progress = 0;
+              vial.x = targetX;
+              vial.y = finalY;
+              vial.used = true;
+              this.crystalAdded = true;
+
+              this.checkSequence();
+            }
           }
         } else {
           // Regular bottle animation
@@ -793,9 +903,8 @@ class Level {
 
       // ---- Draw vial ----
 
-      // Crystal is drawn between the bowl halves above; skip any
-      // additional drawing for crystal here (both moving and static).
-      if (vial.isCrystal) return;
+      // Crystal is now handled in the same flow as other vials so it
+      // participates in hover/click/held behaviors. No special-case skip.
 
       // If this vial is currently held, skip drawing here so we can
       // render it later on top of UI elements (envelope, badges).
@@ -1033,6 +1142,41 @@ class Level {
       push();
       // Apply hover lift (vertical offset) when translating to draw position
       const drawY = vial.y + (vial.lift || 0);
+
+      // Crystal clipping: only while actively falling — clip drawing to the
+      // region above rimY so the crystal is progressively cropped as it sinks,
+      // as if being swallowed by the cauldron opening.
+      const applyCrystalClip =
+        vial.isCrystal && vial.isMoving && this.dropZone && this.dropZone.rimY;
+      if (applyCrystalClip) {
+        const dz = this.dropZone;
+        const arcCx = dz.x;
+        const arcCy = dz.arcCenterY;
+        const arcRx = (dz.ringWidth || 0) / 2;
+        const arcRy = (dz.ringHeight || 0) / 2;
+
+        drawingContext.save();
+        drawingContext.beginPath();
+        // Manually trace clip region: everything above the rim arc.
+        // Bottom boundary follows the top half of the rim ellipse (curves downward
+        // toward the sides), matching the orange arc exactly.
+        drawingContext.moveTo(0, 0);
+        drawingContext.lineTo(BASE_WIDTH, 0);
+        drawingContext.lineTo(BASE_WIDTH, arcCy);
+        // Top half of ellipse: angle 0 (right) → PI (left), sin is positive so curves down
+        const CLIP_STEPS = 40;
+        for (let i = 0; i <= CLIP_STEPS; i++) {
+          const a = (i / CLIP_STEPS) * Math.PI;
+          drawingContext.lineTo(
+            arcCx + arcRx * Math.cos(a),
+            arcCy + arcRy * Math.sin(a),
+          );
+        }
+        drawingContext.lineTo(0, arcCy);
+        drawingContext.closePath();
+        drawingContext.clip();
+      }
+
       translate(vial.x, drawY);
       scale(vial.scale);
 
@@ -1075,19 +1219,17 @@ class Level {
 
       noStroke();
       image(vial.img, 0, 0, vial.width, vial.height);
+      if (applyCrystalClip) {
+        drawingContext.restore();
+      }
       pop();
     });
 
     // (Held vial is drawn later so it can appear above UI elements)
 
-    // Show result
+    // ---- RESULT SCREEN ----
     if (this.levelResult) {
-      push();
-      textAlign(CENTER, CENTER);
-      textSize(48);
-      fill(this.levelResult === "CORRECT" ? "green" : "red");
-      text(this.levelResult, BASE_WIDTH / 2, BASE_HEIGHT / 2);
-      pop();
+      Results.draw(this.levelResult);
     }
 
     // ---- ENVELOPE ICON ----
@@ -1147,7 +1289,7 @@ class Level {
     }
 
     // ---- Draw held vial above envelope/badge (normal state) ----
-    const heldVial = this.vials.find((v) => v.isHeld && !v.isCrystal);
+    const heldVial = this.vials.find((v) => v.isHeld);
     if (heldVial && !this.isOrderOpen) {
       push();
       const drawY = heldVial.y + (heldVial.lift || 0);
@@ -1264,23 +1406,20 @@ class Level {
         rect(barX, barY, startBtnWidth, barHeight);
         pop();
 
-        // Gradient fill (red → yellow → green, left to right)
+        // Gradient fill (red → yellow → green) rendered from cached graphic
         push();
+        imageMode(CORNER);
+        const g2 = this._getPatienceGradient(startBtnWidth, barHeight);
+        image(g2, barX, barY);
+        const filledWFloat2 = Math.max(0, startBtnWidth * displayFrac);
+        fill("#CCCCCC");
         noStroke();
-        const gradientSteps = startBtnWidth;
-        for (let i = 0; i < gradientSteps; i++) {
-          const t = i / gradientSteps;
-          let c;
-          if (t < 0.5) {
-            // Red to yellow
-            c = lerpColor(color("#D00000"), color("#FFD700"), t * 2);
-          } else {
-            // Yellow to green
-            c = lerpColor(color("#FFD700"), color("#228B22"), (t - 0.5) * 2);
-          }
-          fill(c);
-          rect(barX + i, barY, 1, barHeight);
-        }
+        rect(
+          barX + filledWFloat2,
+          barY,
+          startBtnWidth - filledWFloat2,
+          barHeight,
+        );
         pop();
 
         // Increment lines (2 minutes = 120 seconds, lines every 30 seconds = 4 segments)
@@ -1379,7 +1518,7 @@ class Level {
       }
 
       // If a vial is held, draw it above the overlay elements so it remains visible
-      const heldVialOverlay = this.vials.find((v) => v.isHeld && !v.isCrystal);
+      const heldVialOverlay = this.vials.find((v) => v.isHeld);
       if (heldVialOverlay) {
         push();
         const drawY = heldVialOverlay.y + (heldVialOverlay.lift || 0);
@@ -1425,6 +1564,10 @@ class Level {
 
     this.selectedBottle.isMoving = true;
     this.selectedBottle.progress = 0;
+    if (this.selectedBottle.isCrystal) {
+      this.patiencePaused = true;
+      this.patienceElapsedAtPause = millis() - (this.patienceStart || 0);
+    }
   }
 }
 
@@ -1442,6 +1585,10 @@ function drawLevel() {
   translate(offsetX, offsetY);
   scale(scaleFactor);
   levelInstance.draw();
+  // If the level has a result, draw the results overlay (in BASE coords)
+  if (levelInstance.levelResult && typeof Results !== "undefined") {
+    Results.draw(levelInstance.levelResult);
+  }
   pop();
 }
 
@@ -1451,6 +1598,18 @@ function levelMousePressed() {
   const { scaleFactor, offsetX, offsetY } = getScaleAndOffset();
   const adjustedX = (mouseX - offsetX) / scaleFactor;
   const adjustedY = (mouseY - offsetY) / scaleFactor;
+
+  // If a result overlay is active, forward clicks to it (BASE coords)
+  if (levelInstance.levelResult && typeof Results !== "undefined") {
+    Results.mousePressed(adjustedX, adjustedY);
+    return;
+  }
+
+  // Route clicks to result screen if active
+  if (levelInstance.levelResult) {
+    Results.mousePressed(adjustedX, adjustedY);
+    return;
+  }
 
   // Check if a bottle is currently being held
   const heldVial = levelInstance.vials.find((v) => v.isHeld);
@@ -1486,7 +1645,7 @@ function levelMousePressed() {
       vial.isHeld = true;
       // swap to open asset and slightly enlarge while held
       vial.img = vial.openImg || vial.closedImg;
-      vial.targetScale = 1.08;
+      vial.targetScale = vial.isCrystal ? 1.18 : 1.08;
     } else {
       vial.isSelected = false;
     }
@@ -1620,7 +1779,27 @@ function levelMousePressed() {
 
 function levelKeyPressed() {
   // ESC returns to start screen
+  if (!levelInstance) return;
+
   if (keyCode === ESCAPE) {
     currentScreen = "start";
+    return;
+  }
+
+  // Debug keys: 1 = success, 2 = wrong, 3 = timeout
+  if (key === "1") {
+    levelInstance.levelResult = "CORRECT";
+    if (typeof Results !== "undefined") Results.reset();
+    return;
+  }
+  if (key === "2") {
+    levelInstance.levelResult = "WRONG";
+    if (typeof Results !== "undefined") Results.reset();
+    return;
+  }
+  if (key === "3") {
+    levelInstance.levelResult = "TIMEOUT";
+    if (typeof Results !== "undefined") Results.reset();
+    return;
   }
 }
