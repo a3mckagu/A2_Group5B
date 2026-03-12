@@ -423,6 +423,7 @@ class Level {
       // Gradient fill (red → yellow → green) rendered from a cached graphic
       push();
       imageMode(CORNER);
+      rectMode(CORNER);
       const g = this._getPatienceGradient(barWidth, barHeight);
       image(g, barX, barY);
       // overlay depleted area with background color using fractional width
@@ -1372,6 +1373,7 @@ class Level {
         // Gradient fill (red → yellow → green) rendered from cached graphic
         push();
         imageMode(CORNER);
+        rectMode(CORNER);
         const g2 = this._getPatienceGradient(startBtnWidth, barHeight);
         image(g2, barX, barY);
         const filledWFloat2 = Math.max(0, startBtnWidth * displayFrac);
@@ -1639,18 +1641,18 @@ class Level {
     // line removed to avoid extra dividing rules on the left page
     // (we still use _warnRuleY for positioning the warning text)
 
-    // — Warning text —
-    textFont(FONT_IM_FELL_ENGLISH);
-    textStyle(ITALIC);
-    textSize(12);
-    textAlign(CENTER, TOP);
-    fill(96, 56, 19, 175);
-    // Shift these warning lines further upward so they are well inside the page
-    text("Tread carefully.", leftPageCX, _warnRuleY - 33);
-    textStyle(NORMAL);
-    textSize(10.5);
-    fill(96, 56, 19, 120);
-    text("A misstep cannot be undone.", leftPageCX, _warnRuleY - 16);
+    // // — Warning text —
+    // textFont(FONT_IM_FELL_ENGLISH);
+    // textStyle(ITALIC);
+    // textSize(12);
+    // textAlign(CENTER, TOP);
+    // fill(96, 56, 19, 175);
+    // // Shift these warning lines further upward so they are well inside the page
+    // text("Tread carefully.", leftPageCX, _warnRuleY - 33);
+    // textStyle(NORMAL);
+    // textSize(10.5);
+    // fill(96, 56, 19, 120);
+    // text("A misstep cannot be undone.", leftPageCX, _warnRuleY - 16);
 
     // (Right-page warning will be rendered below after diagram coords are set)
 
@@ -2038,13 +2040,8 @@ function levelMousePressed() {
 }
 
 function levelKeyPressed() {
-  // ESC returns to start screen
+  // ESC return disabled temporarily
   if (!levelInstance) return;
-
-  if (keyCode === ESCAPE) {
-    currentScreen = "start";
-    return;
-  }
 
   // Debug keys: 1 = success, 2 = wrong, 3 = timeout
   // Only allow CORRECT/WRONG debug triggers when the crystal has been added

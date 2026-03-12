@@ -108,10 +108,7 @@ function mapKeyPressed() {
     currentScreen = "start";
   }
 
-  // ESC returns to start screen
-  if (keyCode === ESCAPE) {
-    currentScreen = "start";
-  }
+  // ESC to return disabled temporarily
 }
 
 // ------------------------------------------------------------

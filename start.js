@@ -56,7 +56,7 @@ function drawStart() {
     y: height * 0.6,
     w: btnWidth2,
     h: btnHeight,
-    label: "Alchemist's Guide",
+    label: "Alchemist's Handbook",
   };
   const quitBtn = {
     x: width / 2,
