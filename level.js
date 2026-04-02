@@ -22,7 +22,7 @@ const layout = {
   crystal: { x: 820, y: 455, w: 36 },
   orderSheet: { x: 940, y: 210, w: 150 },
   bowl: { x: 840, y: 500, w: 95 },
-  envelope: { x: 1100, y: 50, w: 50 },
+  envelope: { x: 1092, y: 55, w: 50 },
 
   shelf: {
     x: 80, // starting X position of the first bottle on the shelf (moved left)
@@ -34,7 +34,18 @@ const layout = {
 };
 
 class Level {
-  constructor(assets) {
+  constructor(assetsOrLevelNumber, levelNumber) {
+    // Handle both old API (assets only) and new API (assets with levelNumber)
+    let assets;
+    if (assetsOrLevelNumber && assetsOrLevelNumber.bottleBlack) {
+      // New API: first param is assets with levelNumber property
+      assets = assetsOrLevelNumber;
+      this.levelNumber = assetsOrLevelNumber.levelNumber || 1;
+    } else {
+      // Old API fallback
+      assets = assetsOrLevelNumber;
+      this.levelNumber = levelNumber || 1;
+    }
     this.assets = assets;
 
     // ---- VIALS CONFIGURATION ----
@@ -124,6 +135,58 @@ class Level {
         symbol: assets.orangeSymbol,
         colour: "yellow",
       },
+      // Level 2+ only: additional row of 4 vials
+      ...(this.levelNumber > 1
+        ? [
+            {
+              id: "lightorange2",
+              img: assets.bottleOrange2,
+              openImg: assets.bottleOpenOrange2,
+              symbol: assets.orangeSymbol,
+              colour: "lightorange2",
+            },
+            {
+              id: "lightpink2",
+              img: assets.bottleLightpink2,
+              openImg: assets.bottleOpenLightpink2,
+              symbol: assets.greenSymbol,
+              colour: "lightpink2",
+            },
+            {
+              id: "lightblue2",
+              img: assets.bottleLightblue2,
+              openImg: assets.bottleOpenLightblue2,
+              symbol: assets.blueSymbol,
+              colour: "lightblue2",
+            },
+            {
+              id: "yellow2",
+              img: assets.bottleYellow2,
+              openImg: assets.bottleOpenYellow2,
+              symbol: assets.orangeSymbol,
+              colour: "yellow2",
+            },
+          ]
+        : []),
+      // Level 2+ only: additional vials (Level 2 shares these with Level 3)
+      ...(this.levelNumber > 1
+        ? [
+            {
+              id: "black2",
+              img: assets.bottleBlack2,
+              openImg: assets.bottleOpenBlack2,
+              symbol: assets.greenSymbol,
+              colour: "black2",
+            },
+            {
+              id: "darkgreen2",
+              img: assets.bottleDarkgreen2,
+              openImg: assets.bottleOpenDarkgreen2,
+              symbol: assets.greenSymbol,
+              colour: "darkgreen2",
+            },
+          ]
+        : []),
       {
         id: "crystal",
         img: assets.crystalImg,
@@ -164,9 +227,10 @@ class Level {
 
     const rowGap = layout.shelf.rowSpacing || 20;
 
-    // Ensure crystal is excluded from shelf placement so the shelf always
-    // contains exactly 3 rows of 4 bottles (12 slots). Position the crystal
+    // Ensure crystal is excluded from shelf placement. Position the crystal
     // separately at its dedicated layout location.
+    // Level 1: 12 vials (3 rows × 4)
+    // Level 2+: 16 vials (4 rows × 4)
     const nonCrystalConfigs = vialsConfig.filter((c) => !c.isCrystal);
     const crystalConfig = vialsConfig.find((c) => c.isCrystal);
 
@@ -281,23 +345,134 @@ class Level {
     };
     // --- SEQUENCE TRACKING ---
     this.addedIngredients = [];
-    this.correctOrder = [
-      assets.bottleLightgreen,
-      assets.bottleMidblue,
-      assets.bottleBlack,
-      assets.bottleLightpurple,
-      assets.bottleLightred,
-    ];
+    // Level 1: only 3 vials (id: lightgreen, midblue, lightred)
+    // Level 2: TWO sequences - first is lightpink2, lightorange, black, yellow2; second is lightgreen, midblue, black, lightpurple, lightred
+    // Level 3+: lightgreen, midblue, black, lightpurple, lightred
+    if (this.levelNumber === 1) {
+      this.correctOrder = [
+        assets.bottleLightgreen,
+        assets.bottleMidblue,
+        assets.bottleLightred,
+      ];
+      this.sequences = null; // Level 1 uses single sequence (correctOrder)
+      this.currentSequenceIndex = 0;
+      this.completedSequences = [];
+    } else if (this.levelNumber === 2) {
+      // Level 2 has TWO sequences that must both be completed
+      this.sequences = [
+        // First sequence: Level 2 vials
+        [
+          assets.bottleLightpink2,
+          assets.bottleOrange2,
+          assets.bottleBlack,
+          assets.bottleYellow2,
+        ],
+        // Second sequence: Level 3 vials
+        [
+          assets.bottleLightgreen,
+          assets.bottleMidblue,
+          assets.bottleBlack,
+          assets.bottleLightpurple,
+          assets.bottleLightred,
+        ],
+      ];
+      this.correctOrder = null; // Level 2 uses sequences array
+      this.currentSequenceIndex = 0; // Start with first sequence
+      this.completedSequences = [false, false]; // Track completion of each sequence
+    } else {
+      this.correctOrder = [
+        assets.bottleLightgreen,
+        assets.bottleMidblue,
+        assets.bottleBlack,
+        assets.bottleLightpurple,
+        assets.bottleLightred,
+      ];
+      this.sequences = null; // Level 3+ uses single sequence (correctOrder)
+      this.currentSequenceIndex = 0;
+      this.completedSequences = [];
+    }
     this.levelResult = null; // "CORRECT" or "WRONG"
     this.crystalAdded = false; // Track whether the crystal has been added to cauldron
+    // Track displayed completion cards for each sequence
+    this.sequenceResultsToDisplay = []; // Array of { sequenceIndex, isCorrect } for card display
     // Drop zone placed above the cauldron; radius adjustable
     // default radius reduced for a smaller outline
     this.dropZone = { x: layout.cauldron.x, y: layout.cauldron.y - 220, r: 26 };
     this.recipeBookLift = 0; // persistent lift for smooth hover animation
+    this.orderScrollOffset = 0; // scroll position for order cards container
   }
 
   checkSequence() {
-    // Compare only the bottle ingredients (exclude crystal) against the correct order
+    // Level 2 with multiple sequences
+    if (this.sequences) {
+      const currentSequence = this.sequences[this.currentSequenceIndex];
+      const isSequenceCorrect =
+        this.addedIngredients.length === currentSequence.length &&
+        currentSequence.every(
+          (bottleImg, index) => this.addedIngredients[index] === bottleImg,
+        );
+
+      // Check if sequence is incorrect (failed before crystal is added)
+      const isSequenceIncorrect =
+        this.addedIngredients.length > 0 &&
+        this.addedIngredients.length <= currentSequence.length &&
+        this.addedIngredients.some(
+          (bottleImg, index) => bottleImg !== currentSequence[index],
+        );
+
+      // If sequence is incorrect, set fail result immediately (before crystal)
+      if (isSequenceIncorrect && this.addedIngredients.length > 0) {
+        this.levelResult = "WRONG";
+        return;
+      }
+
+      // Only process when crystal is added
+      if (!this.crystalAdded) return;
+
+      // If sequence is correct when crystal is added
+      if (isSequenceCorrect) {
+        this.completedSequences[this.currentSequenceIndex] = true;
+        // Track that this sequence was completed correctly for display card
+        this.sequenceResultsToDisplay.push({
+          sequenceIndex: this.currentSequenceIndex,
+          isCorrect: true,
+        });
+
+        // Check if all sequences are completed
+        const allSequencesCompleted = this.completedSequences.every((s) => s);
+        if (allSequencesCompleted) {
+          this.levelResult = "CORRECT";
+        } else {
+          // Move to next sequence - reset for the next one
+          this.currentSequenceIndex++;
+          this.addedIngredients = [];
+          this.crystalAdded = false; // Allow crystal to be used again for next sequence
+
+          // Reset crystal vial so it can be picked up again
+          const crystalVial = this.vials.find((v) => v.isCrystal);
+          if (crystalVial) {
+            crystalVial.used = false;
+            crystalVial.isMoving = false;
+            crystalVial.isSelected = false;
+            crystalVial.progress = 0;
+            crystalVial.targetScale = 1.0;
+            crystalVial.droppedFromHeld = false;
+            crystalVial.x = crystalVial.startX;
+            crystalVial.y = crystalVial.startY;
+          }
+        }
+      } else {
+        // Sequence is incorrect
+        // Track that this sequence failed for display card
+        this.sequenceResultsToDisplay.push({
+          sequenceIndex: this.currentSequenceIndex,
+          isCorrect: false,
+        });
+      }
+      return;
+    }
+
+    // Single sequence (Level 1 and Level 3+)
     const isCorrect =
       this.addedIngredients.length === this.correctOrder.length &&
       this.correctOrder.every(
@@ -364,7 +539,8 @@ class Level {
     }
 
     // ---- ORDER SHEET (shown after START ORDER is clicked) ----
-    if (this.orderStarted) {
+    // Only show the blank order sheet if orderStarted and no sequences have been completed yet
+    if (this.orderStarted && this.sequenceResultsToDisplay.length === 0) {
       const o = layout.orderSheet;
       const sheetWidth = 290;
       const sheetHeight =
@@ -1294,7 +1470,8 @@ class Level {
 
       // Draw notification panel on right side under envelope
       const panelWidth = 350;
-      const panelHeight = 296;
+      // Extend panel height for Level 2+ to fit multiple cards without scrolling
+      const panelHeight = this.levelNumber >= 2 ? 535 : 296;
       const panelRight = env.x + env.w / 2;
       const panelTop = env.y + envHeight / 2 + 15;
       const panelLeft = panelRight - panelWidth;
@@ -1328,24 +1505,64 @@ class Level {
       const cardLeft = panelLeft + cardMargin;
       const cardTop = panelTop + 60;
       const cardWidth = panelWidth - cardMargin * 2;
-      const cardHeight = panelHeight - 75;
+      const cardHeight = panelHeight - 75; // available viewport height for cards
+
+      // Calculate how many cards are present
+      const numCards = this.levelNumber >= 2 ? 2 : 1;
+      const cardSpacing = 12;
+
+      // For Level 2+, divide available space among cards so they fit without scrolling
+      const singleCardHeight =
+        this.levelNumber >= 2
+          ? (cardHeight - cardSpacing * (numCards - 1)) / numCards
+          : cardHeight;
+
+      // Calculate total content height based on level
+      let totalContentHeight = singleCardHeight;
+
+      // Level 2 has an extra locked card
+      if (this.levelNumber === 2) {
+        totalContentHeight = singleCardHeight + cardSpacing + singleCardHeight;
+      }
+
+      // Clamp scroll offset to valid range
+      const maxScroll = Math.max(0, totalContentHeight - cardHeight);
+      this.orderScrollOffset = Math.max(
+        0,
+        Math.min(this.orderScrollOffset, maxScroll),
+      );
+
+      // Set up clip region for the card area
+      push();
+      drawingContext.save();
+      drawingContext.beginPath();
+      drawingContext.rect(cardLeft, cardTop, cardWidth, cardHeight);
+      drawingContext.clip();
 
       if (!this.orderStarted) {
-        // Show order card when order is active
+        // ---- FIRST CARD: Beginner's Luck ----
         push();
         rectMode(CORNER);
         fill("#F5E6D1");
         noStroke();
-        rect(cardLeft, cardTop, cardWidth, cardHeight, 8);
+        rect(
+          cardLeft,
+          cardTop - this.orderScrollOffset,
+          cardWidth,
+          singleCardHeight,
+          8,
+        );
         pop();
 
-        // Card heading - "Beginner's Luck"
+        // Card heading - varies by level
         push();
         textAlign(LEFT, TOP);
         textFont("Manufacturing Consent");
         textSize(36);
         fill("#2D0900");
-        text("Beginner's Luck", cardLeft + 20, cardTop + 20);
+        const orderTitle =
+          this.levelNumber === 2 ? "Sparks Fly" : "Beginner's Luck";
+        text(orderTitle, cardLeft + 20, cardTop + 20 - this.orderScrollOffset);
         pop();
 
         // "From: Lord Alistair"
@@ -1355,7 +1572,11 @@ class Level {
         textStyle(ITALIC);
         textSize(20);
         fill("#6E6E6E");
-        text("From: Lord Alistair", cardLeft + 20, cardTop + 65);
+        text(
+          "From: Lord Alistair",
+          cardLeft + 20,
+          cardTop + 65 - this.orderScrollOffset,
+        );
         pop();
 
         // Patience bar (above START ORDER button)
@@ -1363,7 +1584,14 @@ class Level {
         const startBtnWidth = cardWidth - startBtnMargin * 2;
         const barHeight = 16;
         const barX = cardLeft + startBtnMargin;
-        const barY = cardTop + cardHeight - 42 - 15 - barHeight - 18; // 18px gap above button
+        const barY =
+          cardTop +
+          singleCardHeight -
+          42 -
+          15 -
+          barHeight -
+          18 -
+          this.orderScrollOffset;
 
         // "CUSTOMER PATIENCE" label
         push();
@@ -1412,7 +1640,12 @@ class Level {
         // "Start Order" button
         const startBtnHeight = 42;
         const startBtnX = cardLeft + startBtnMargin;
-        const startBtnY = cardTop + cardHeight - startBtnHeight - 15;
+        const startBtnY =
+          cardTop +
+          singleCardHeight -
+          startBtnHeight -
+          15 -
+          this.orderScrollOffset;
 
         // Check if hovering over START ORDER button
         const isStartBtnHovered =
@@ -1436,8 +1669,187 @@ class Level {
           startBtnY + startBtnHeight / 2,
         );
         pop();
+
+        // ---- SECOND CARD (LOCKED) - Level 2 only ----
+        if (this.levelNumber === 2) {
+          const card2Top =
+            cardTop + singleCardHeight + cardSpacing - this.orderScrollOffset;
+
+          // Second card background
+          push();
+          rectMode(CORNER);
+          fill("#F5E6D1");
+          noStroke();
+          rect(cardLeft, card2Top, cardWidth, singleCardHeight, 8);
+          pop();
+
+          // Card 2 heading
+          push();
+          textAlign(LEFT, TOP);
+          textFont("Manufacturing Consent");
+          textSize(36);
+          fill("#2D0900");
+          text("Next Order", cardLeft + 20, card2Top + 20);
+          pop();
+
+          // "From: Mystery"
+          push();
+          textAlign(LEFT, TOP);
+          textFont("IM Fell English");
+          textStyle(ITALIC);
+          textSize(20);
+          fill("#6E6E6E");
+          text("From: Mystery", cardLeft + 20, card2Top + 65);
+          pop();
+
+          // "Locked" button
+          const lockedBtnMargin = 20;
+          const lockedBtnWidth = cardWidth - lockedBtnMargin * 2;
+          const lockedBtnHeight = 42;
+          const lockedBtnX = cardLeft + lockedBtnMargin;
+          const lockedBtnY = card2Top + singleCardHeight - lockedBtnHeight - 15;
+
+          push();
+          rectMode(CORNER);
+          fill("#888888");
+          noStroke();
+          rect(lockedBtnX, lockedBtnY, lockedBtnWidth, lockedBtnHeight, 8);
+          pop();
+
+          // Lock emoji + "START ORDER" text
+          push();
+          textAlign(CENTER, CENTER);
+          textFont("VT323");
+          textSize(20);
+          fill("#FFF4E5");
+          text(
+            "🔒 START ORDER",
+            lockedBtnX + lockedBtnWidth / 2,
+            lockedBtnY + lockedBtnHeight / 2,
+          );
+          pop();
+        }
+      } else if (this.levelNumber === 2) {
+        // ---- WHEN ORDER STARTED on Level 2: Show only the locked card ----
+        const card2Top = cardTop - this.orderScrollOffset;
+
+        // Second card background
+        push();
+        rectMode(CORNER);
+        fill("#F5E6D1");
+        noStroke();
+        rect(cardLeft, card2Top, cardWidth, singleCardHeight, 8);
+        pop();
+
+        // Card 2 heading
+        push();
+        textAlign(LEFT, TOP);
+        textFont("Manufacturing Consent");
+        textSize(36);
+        fill("#2D0900");
+        text("Next Order", cardLeft + 20, card2Top + 20);
+        pop();
+
+        // "From: Mystery"
+        push();
+        textAlign(LEFT, TOP);
+        textFont("IM Fell English");
+        textStyle(ITALIC);
+        textSize(20);
+        fill("#6E6E6E");
+        text("From: Mystery", cardLeft + 20, card2Top + 65);
+        pop();
+
+        // "Locked" button
+        const lockedBtnMargin = 20;
+        const lockedBtnWidth = cardWidth - lockedBtnMargin * 2;
+        const lockedBtnHeight = 42;
+        const lockedBtnX = cardLeft + lockedBtnMargin;
+        const lockedBtnY = card2Top + singleCardHeight - lockedBtnHeight - 15;
+
+        push();
+        rectMode(CORNER);
+        fill("#888888");
+        noStroke();
+        rect(lockedBtnX, lockedBtnY, lockedBtnWidth, lockedBtnHeight, 8);
+        pop();
+
+        // Lock emoji + "START ORDER" text
+        push();
+        textAlign(CENTER, CENTER);
+        textFont("VT323");
+        textSize(20);
+        fill("#FFF4E5");
+        text(
+          "🔒 START ORDER",
+          lockedBtnX + lockedBtnWidth / 2,
+          lockedBtnY + lockedBtnHeight / 2,
+        );
+        pop();
+
+        // ---- COMPLETION CARDS FOR FINISHED SEQUENCES ----
+        if (this.sequenceResultsToDisplay.length > 0) {
+          this.sequenceResultsToDisplay.forEach((result, idx) => {
+            const completionCardTop =
+              cardTop +
+              singleCardHeight +
+              cardSpacing +
+              idx * (singleCardHeight + cardSpacing) -
+              this.orderScrollOffset;
+
+            // Get the sequence title and details
+            const sequenceTitles = [
+              "Beginner's Luck",
+              "Sparks Fly", // Second sequence title
+            ];
+            const sequenceFroms = ["From: Lord Alistair", "From: Mystery"];
+            const title = sequenceTitles[result.sequenceIndex] || "Order";
+            const from = sequenceFroms[result.sequenceIndex] || "From: Unknown";
+
+            // Color: light green for completed, light red for failed
+            const bgColor = result.isCorrect ? "#D4F1D4" : "#F5C8C8";
+            const statusText = result.isCorrect ? "COMPLETED" : "FAILED";
+            const statusColor = result.isCorrect ? "#2D5F2D" : "#8B0000";
+
+            // Card background
+            push();
+            rectMode(CORNER);
+            fill(bgColor);
+            noStroke();
+            rect(cardLeft, completionCardTop, cardWidth, singleCardHeight, 8);
+            pop();
+
+            // Status text (COMPLETED or FAILED) above the title
+            push();
+            textAlign(LEFT, TOP);
+            textFont("VT323");
+            textSize(14);
+            fill(statusColor);
+            text(statusText, cardLeft + 20, completionCardTop + 12);
+            pop();
+
+            // Card title
+            push();
+            textAlign(LEFT, TOP);
+            textFont("Manufacturing Consent");
+            textSize(32);
+            fill("#2D0900");
+            text(title, cardLeft + 20, completionCardTop + 30);
+            pop();
+
+            // "From:" info
+            push();
+            textAlign(LEFT, TOP);
+            textFont("IM Fell English");
+            textStyle(ITALIC);
+            textSize(16);
+            fill("#6E6E6E");
+            text(from, cardLeft + 20, completionCardTop + 75);
+            pop();
+          });
+        }
       } else {
-        // No active order — show centered message
+        // ---- OTHER LEVELS (1, 3+) when order started ----
         push();
         textAlign(CENTER, CENTER);
         textFont("IM Fell English");
@@ -1451,6 +1863,10 @@ class Level {
         );
         pop();
       }
+
+      // End clip region
+      drawingContext.restore();
+      pop();
 
       // Close button
       const btnSize = 24;
@@ -1607,7 +2023,14 @@ class Level {
     textSize(30);
     textAlign(CENTER, TOP);
     fill(55, 30, 10);
-    text("Beginner's Luck", leftPageCX, bookTop + 66);
+    // For level 2 second sequence, show level 3 recipe
+    const displayLevelForRecipe =
+      this.levelNumber === 2 && this.currentSequenceIndex === 1
+        ? 3
+        : this.levelNumber;
+    const potionTitle =
+      displayLevelForRecipe === 1 ? "Beginner's Luck" : "Sparks Fly";
+    text(potionTitle, leftPageCX, bookTop + 66);
 
     // — Thin rule below title — (removed)
     // Intentionally omitted to keep the left page cleaner; diamond ornament
@@ -1622,8 +2045,10 @@ class Level {
     fill(55, 30, 10, 210);
 
     const _desc =
-      "Brewed under a waning moon, said to tip fate's scales in the " +
-      "drinker\u2019s  favour before a wager\u2026or a duel.";
+      displayLevelForRecipe === 1
+        ? "Brewed under a waning moon, said to tip f ate's scales in the " +
+          "drinker\u2019s  favour before a wager\u2026or a duel."
+        : "When stars align and ingredients ignite, magic takes flight.";
 
     // Manual word-wrap
     const _words = _desc.split(" ");
@@ -1690,54 +2115,114 @@ class Level {
     text("Activate with Catalyst Crystal", rightWarnX, _warnRuleY - 27);
     textStyle(NORMAL);
 
-    // Vial images mapped to each vertex (clockwise from 3-o'clock)
-    // right=lightred(Last vial), lower-right=lightgreen(Begin here),
-    // lower-left=midblue(Follows), left=black(Anchor), top=lightpurple(Nearly)
-    const vertices = [
-      {
-        x: 810 + SHIFT_X,
-        y: 273,
-        img: this.assets.symbolRed,
-        label: "Last vial.",
-      },
-      {
-        x: 777 + SHIFT_X,
-        y: 368,
-        img: this.assets.symbolLightgreen,
-        label: "Begin here.",
-      },
-      {
-        x: 674 + SHIFT_X,
-        y: 368,
-        img: this.assets.symbolMidblue,
-        label: "Follows the first.",
-      },
-      {
-        x: 644 + SHIFT_X,
-        y: 273,
-        img: this.assets.symbolBlack,
-        label: "The anchor.",
-      },
-      {
-        x: 726 + SHIFT_X,
-        y: 208,
-        img: this.assets.symbolLightpurple,
-        label: "Nearly there.",
-      },
-    ];
+    // Define vertices based on level
+    // Level 1: Triangle with 3 vials
+    // Level 2 (first sequence): Square (diamond orientation) with 4 vials
+    // Level 2 (second sequence) / Level 3+: Pentagon with 5 vials
+    let vertices;
+    const squareRadius = 85; // distance from center to each corner for Level 2
+    const isLevel2FirstSequence =
+      this.levelNumber === 2 && this.currentSequenceIndex === 0;
+    if (this.levelNumber === 1) {
+      // Triangle layout: bottom-left, bottom-right, top-center
+      vertices = [
+        {
+          x: 650 + SHIFT_X,
+          y: 350,
+          img: this.assets.symbolLightgreen,
+          label: "Begin here.",
+        },
+        {
+          x: 800 + SHIFT_X,
+          y: 350,
+          img: this.assets.symbolMidblue,
+          label: "Follows the first.",
+        },
+        {
+          x: 725 + SHIFT_X,
+          y: 200,
+          img: this.assets.symbolRed,
+          label: "Last vial.",
+        },
+      ];
+    } else if (isLevel2FirstSequence) {
+      // Square (diamond) layout: 4 icons at cardinal points (Level 2 first sequence only)
+      vertices = [
+        {
+          x: CX,
+          y: CY + squareRadius,
+          img: this.assets.symbolLightpink2,
+          label: "Begin here.",
+        },
+        {
+          x: CX - squareRadius,
+          y: CY,
+          img: this.assets.symbolOrange2,
+          label: "After first.",
+        },
+        {
+          x: CX,
+          y: CY - squareRadius,
+          img: this.assets.symbolBlack,
+          label: "The anchor.",
+        },
+        {
+          x: CX + squareRadius,
+          y: CY,
+          img: this.assets.symbolYellow2,
+          label: "Final vial.",
+        },
+      ];
+    } else {
+      // Pentagon layout: original 5 vials for level 2 (second sequence) and level 3+
+      vertices = [
+        {
+          x: 810 + SHIFT_X,
+          y: 273,
+          img: this.assets.symbolRed,
+          label: "Last vial.",
+        },
+        {
+          x: 777 + SHIFT_X,
+          y: 368,
+          img: this.assets.symbolLightgreen,
+          label: "Begin here.",
+        },
+        {
+          x: 674 + SHIFT_X,
+          y: 368,
+          img: this.assets.symbolMidblue,
+          label: "Follows the first.",
+        },
+        {
+          x: 644 + SHIFT_X,
+          y: 273,
+          img: this.assets.symbolBlack,
+          label: "The anchor.",
+        },
+        {
+          x: 726 + SHIFT_X,
+          y: 208,
+          img: this.assets.symbolLightpurple,
+          label: "Nearly there.",
+        },
+      ];
+    }
 
     push();
 
-    // -- Outer and inner rings --
-    noFill();
-    stroke(90, 55, 18, 46); // rgba(90,55,18,0.18) → alpha ~46
-    strokeWeight(1);
-    ellipseMode(CENTER);
-    circle(CX, CY, RING_R * 2);
-    stroke(90, 55, 18, 26);
-    circle(CX, CY, INNER_R * 2);
+    // -- Outer and inner rings (only for pentagon/Level 3+ and Level 2 second sequence, not triangle or square or Level 2 first sequence) --
+    if (!(this.levelNumber === 1 || isLevel2FirstSequence)) {
+      noFill();
+      stroke(90, 55, 18, 46); // rgba(90,55,18,0.18) → alpha ~46
+      strokeWeight(1);
+      ellipseMode(CENTER);
+      circle(CX, CY, RING_R * 2);
+      stroke(90, 55, 18, 26);
+      circle(CX, CY, INNER_R * 2);
+    }
 
-    // -- Pentagon outline (dashed approximation via short segments) --
+    // -- Polygon outline (triangle for level 1, square for level 2, pentagon for level 3+) --
     stroke(90, 55, 18, 28);
     strokeWeight(1);
     noFill();
@@ -1745,11 +2230,13 @@ class Level {
     for (const v of vertices) vertex(v.x, v.y);
     endShape(CLOSE);
 
-    // -- Spokes from centroid to each vertex --
-    stroke(90, 55, 18, 18);
-    strokeWeight(0.8);
-    for (const v of vertices) {
-      line(CX, CY, v.x, v.y);
+    // -- Spokes from centroid to each vertex (only for pentagon/Level 3+ and Level 2 second sequence) --
+    if (!(this.levelNumber === 1 || isLevel2FirstSequence)) {
+      stroke(90, 55, 18, 18);
+      strokeWeight(0.8);
+      for (const v of vertices) {
+        line(CX, CY, v.x, v.y);
+      }
     }
 
     // -- Symbols (vial images) centred on each vertex --
@@ -1784,18 +2271,53 @@ class Level {
         const symbolH = (v.img.height / v.img.width) * SYM;
         const offset = symbolH / 2 + 8; // px clear distance from symbol edge
         const extraDown = 6; // additional downward nudge for lower labels
-        // Place "Nearly there." above its symbol; others below their symbols.
+
         let lx = v.x;
-        const ly =
-          v.label === "Nearly there." ? v.y - offset : v.y + offset + extraDown;
-        // Increase horizontal spacing between lower-left and lower-right labels
-        if (v.label === "Begin here.") lx += 12;
-        else if (v.label === "Follows the first.") lx -= 12;
-        // Use centered alignment; choose vertical anchor per position
-        if (v.label === "Nearly there.") {
-          g.textAlign(CENTER, BOTTOM);
+        let ly;
+
+        if (this.levelNumber === 1) {
+          // Triangle layout: "Last vial" above, others below
+          ly =
+            v.label === "Last vial." ? v.y - offset : v.y + offset + extraDown;
+          if (v.label === "Last vial.") {
+            g.textAlign(CENTER, BOTTOM);
+          } else {
+            g.textAlign(CENTER, TOP);
+          }
+        } else if (isLevel2FirstSequence) {
+          // Square (diamond) layout: labels positioned outside each symbol (Level 2 first sequence only)
+          if (v.label === "Begin here.") {
+            // Bottom symbol - label below
+            ly = v.y + offset + extraDown;
+            g.textAlign(CENTER, TOP);
+          } else if (v.label === "After first.") {
+            // Left symbol - label below
+            ly = v.y + offset + extraDown;
+            g.textAlign(CENTER, TOP);
+          } else if (v.label === "The anchor.") {
+            // Top symbol - label above
+            ly = v.y - offset;
+            g.textAlign(CENTER, BOTTOM);
+          } else if (v.label === "Final vial.") {
+            // Right symbol - label below
+            ly = v.y + offset + extraDown;
+            g.textAlign(CENTER, TOP);
+          }
         } else {
-          g.textAlign(CENTER, TOP);
+          // Pentagon layout: "Nearly there." above, others below (Level 2 second sequence and Level 3+)
+          ly =
+            v.label === "Nearly there."
+              ? v.y - offset
+              : v.y + offset + extraDown;
+          // Increase horizontal spacing between lower-left and lower-right labels
+          if (v.label === "Begin here.") lx += 12;
+          else if (v.label === "Follows the first.") lx -= 12;
+          // Use centered alignment; choose vertical anchor per position
+          if (v.label === "Nearly there.") {
+            g.textAlign(CENTER, BOTTOM);
+          } else {
+            g.textAlign(CENTER, TOP);
+          }
         }
         g.text(v.label, lx * DPR, ly * DPR);
       }
@@ -2049,6 +2571,19 @@ function levelMousePressed() {
     levelInstance.isRecipeOpen = true;
     return;
   }
+}
+
+function levelMouseWheel(e) {
+  if (!levelInstance || !levelInstance.isOrderOpen) return;
+
+  // Only allow scrolling on Level 2
+  if (levelInstance.levelNumber !== 2) return;
+
+  // Scroll sensitivity
+  const scrollSpeed = 10;
+  levelInstance.orderScrollOffset += e.deltaY > 0 ? scrollSpeed : -scrollSpeed;
+
+  e.preventDefault();
 }
 
 function levelKeyPressed() {

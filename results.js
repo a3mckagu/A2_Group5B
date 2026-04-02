@@ -13,8 +13,9 @@
 //   VT323                 — status label + button
 
 const Results = {
-  // ── Button rect in BASE coords (set each draw, read in mousePressed) ──
+  // ── Button rects in BASE coords (set each draw, read in mousePressed) ──
   _playAgainBtn: { x: 0, y: 0, w: 0, h: 0 },
+  _backToMapBtn: { x: 0, y: 0, w: 0, h: 0 },
 
   // ── Unfurl animation state ──
   _unfurlStart: null, // millis() when current result was first drawn
@@ -113,7 +114,8 @@ const Results = {
 
     // ── Banner dimensions ──
     const BW = 580; // banner width
-    const BH = 320; // banner height (body only, excluding rod)
+    // Banner height varies by result type: CORRECT has one button (shorter), others have two buttons (taller)
+    const BH = type === "CORRECT" ? 320 : 420; // banner height (body only, excluding rod)
     const ROD_H = 18;
     const ROD_Y = 20; // rod centre Y (from banner top)
     const BODY_TOP = ROD_Y + 12; // where fabric starts
@@ -152,6 +154,7 @@ const Results = {
       trimCol,
       innerBorder,
       progress,
+      resultType: type,
     });
 
     // ── Text (fades in after banner is mostly revealed) ──
@@ -176,6 +179,7 @@ const Results = {
         trimCol,
         innerBorder,
         textFade,
+        resultType: type,
       });
     }
 
@@ -200,6 +204,7 @@ const Results = {
     rodCol,
     trimCol,
     innerBorder,
+    resultType,
   }) {
     const GOLD_INSET = 10; // gold border inset from fabric edge
     const FACE_INSET = 18; // face inset from fabric edge
@@ -331,6 +336,7 @@ const Results = {
     trimCol,
     innerBorder,
     textFade,
+    resultType,
   }) {
     const alpha = textFade * 255;
     const textAreaTop = BODY_TOP + 36;
@@ -387,49 +393,86 @@ const Results = {
     fill(245, 245, 245, alpha * 0.85);
     text(attrText, cx, y);
 
-    // ── Button ──
+    // ── Buttons ──
     const btnW = 200;
     const btnH = 36;
-    const btnX = cx - btnW / 2;
-    const btnY = textAreaBottom - btnH - 8;
+    const btnPadding = 15;
 
-    Results._playAgainBtn = { x: btnX, y: btnY, w: btnW, h: btnH };
+    // Determine which buttons to show based on result type
+    const showPlayAgain = resultType !== "CORRECT";
+    const showBackToMap = true; // always show
 
-    // Detect hover in BASE coordinates so the button lightens on hover
-    let isBtnHovered = false;
-    if (typeof getScaleAndOffset === "function") {
-      const { scaleFactor, offsetX, offsetY } = getScaleAndOffset();
-      const adjustedMX = (mouseX - offsetX) / scaleFactor;
-      const adjustedMY = (mouseY - offsetY) / scaleFactor;
-      isBtnHovered =
-        adjustedMX >= btnX &&
-        adjustedMX <= btnX + btnW &&
-        adjustedMY >= btnY &&
-        adjustedMY <= btnY + btnH;
+    // Calculate button positions
+    let btnY1, btnY2;
+    if (showPlayAgain && showBackToMap) {
+      // Two buttons: stacked vertically with padding
+      btnY2 = textAreaBottom - btnH - 8; // bottom button (Back To Map)
+      btnY1 = btnY2 - btnH - btnPadding; // top button (Play Again / Try Again)
+    } else if (showBackToMap) {
+      // Only Back To Map, centered
+      btnY2 = textAreaBottom - btnH - 8;
     }
 
-    stroke(red(trimCol), green(trimCol), blue(trimCol), alpha * 0.7);
-    strokeWeight(1);
-    // Lighten the button fill when hovered
-    const lightenAmount = isBtnHovered ? 20 : 0;
-    const br = min(255, red(trimCol) + lightenAmount);
-    const bg = min(255, green(trimCol) + lightenAmount);
-    const bb = min(255, blue(trimCol) + lightenAmount);
-    fill(br, bg, bb, alpha * 0.95);
-    rectMode(CORNER);
-    rect(btnX, btnY, btnW, btnH, 4);
+    const btnX = cx - btnW / 2;
 
-    noStroke();
-    // Slightly adjust button text color on hover for contrast
-    const textDarken = isBtnHovered ? -10 : 0;
-    const tr = constrain(red(innerBorder) + textDarken, 0, 255);
-    const tg = constrain(green(innerBorder) + textDarken, 0, 255);
-    const tb = constrain(blue(innerBorder) + textDarken, 0, 255);
-    fill(tr, tg, tb, alpha);
-    textFont(FONT_VT323);
-    textSize(24);
-    textAlign(CENTER, CENTER);
-    text(btnLabel, cx, btnY + btnH / 2);
+    // Helper function to draw a button
+    const drawButton = (
+      btnX,
+      btnY,
+      btnW,
+      btnH,
+      btnText,
+      trimCol,
+      innerBorder,
+    ) => {
+      // Detect hover in BASE coordinates
+      let isBtnHovered = false;
+      if (typeof getScaleAndOffset === "function") {
+        const { scaleFactor, offsetX, offsetY } = getScaleAndOffset();
+        const adjustedMX = (mouseX - offsetX) / scaleFactor;
+        const adjustedMY = (mouseY - offsetY) / scaleFactor;
+        isBtnHovered =
+          adjustedMX >= btnX &&
+          adjustedMX <= btnX + btnW &&
+          adjustedMY >= btnY &&
+          adjustedMY <= btnY + btnH;
+      }
+
+      stroke(red(trimCol), green(trimCol), blue(trimCol), alpha * 0.7);
+      strokeWeight(1);
+      // Lighten the button fill when hovered
+      const lightenAmount = isBtnHovered ? 20 : 0;
+      const br = min(255, red(trimCol) + lightenAmount);
+      const bg = min(255, green(trimCol) + lightenAmount);
+      const bb = min(255, blue(trimCol) + lightenAmount);
+      fill(br, bg, bb, alpha * 0.95);
+      rectMode(CORNER);
+      rect(btnX, btnY, btnW, btnH, 4);
+
+      noStroke();
+      // Slightly adjust button text color on hover for contrast
+      const textDarken = isBtnHovered ? -10 : 0;
+      const tr = constrain(red(innerBorder) + textDarken, 0, 255);
+      const tg = constrain(green(innerBorder) + textDarken, 0, 255);
+      const tb = constrain(blue(innerBorder) + textDarken, 0, 255);
+      fill(tr, tg, tb, alpha);
+      textFont(FONT_VT323);
+      textSize(24);
+      textAlign(CENTER, CENTER);
+      text(btnText, cx, btnY + btnH / 2);
+    };
+
+    // Draw Play Again / Try Again button if not CORRECT
+    if (showPlayAgain) {
+      Results._playAgainBtn = { x: btnX, y: btnY1, w: btnW, h: btnH };
+      drawButton(btnX, btnY1, btnW, btnH, btnLabel, trimCol, innerBorder);
+    } else {
+      Results._playAgainBtn = { x: 0, y: 0, w: 0, h: 0 }; // disable
+    }
+
+    // Draw Back To Map button (always)
+    Results._backToMapBtn = { x: btnX, y: btnY2, w: btnW, h: btnH };
+    drawButton(btnX, btnY2, btnW, btnH, "BACK TO MAP", trimCol, innerBorder);
 
     pop();
   },
@@ -442,17 +485,25 @@ const Results = {
   // mx / my are already in BASE coords (divide out scale/offset before calling).
   mousePressed: function (mx, my) {
     const pa = Results._playAgainBtn;
+    const ba = Results._backToMapBtn;
 
     // Play Again / Try Again
-    if (mx >= pa.x && mx <= pa.x + pa.w && my >= pa.y && my <= pa.y + pa.h) {
+    if (
+      pa.w > 0 &&
+      mx >= pa.x &&
+      mx <= pa.x + pa.w &&
+      my >= pa.y &&
+      my <= pa.y + pa.h
+    ) {
       // Reset the results animation state
       Results._unfurlStart = null;
       Results._lastResult = null;
 
-      // Recreate a fresh level instance and switch to the level screen
+      // Recreate a fresh level instance on the current level and switch to the level screen
       // This ensures the game truly restarts from the level screen.
       currentScreen = "level";
       levelInstance = new Level({
+        levelNumber: currentLevelNumber,
         cauldronImg,
         recipeBookClosed,
         recipeBookOpen,
@@ -460,7 +511,9 @@ const Results = {
         orderSheet,
         blankOrderSheet2,
         bottleBlack,
+        bottleBlack2,
         bottleDarkgreen,
+        bottleDarkgreen2,
         bottleDarkpurple,
         bottleLightblue,
         bottleLightgreen,
@@ -469,11 +522,17 @@ const Results = {
         bottleLightred,
         bottleMidblue,
         bottleClosedOrange,
+        bottleOrange2,
         bottleTeal,
         bottleYellow,
+        bottleYellow2,
+        bottleLightblue2,
+        bottleLightpink2,
         // Open variants
         bottleOpenBlack,
+        bottleOpenBlack2,
         bottleOpenDarkgreen,
+        bottleOpenDarkgreen2,
         bottleOpenDarkpurple,
         bottleOpenLightblue,
         bottleOpenLightgreen,
@@ -482,8 +541,12 @@ const Results = {
         bottleOpenLightred,
         bottleOpenMidblue,
         bottleOpenOrange,
+        bottleOpenOrange2,
         bottleOpenTeal,
         bottleOpenYellow,
+        bottleOpenYellow2,
+        bottleOpenLightblue2,
+        bottleOpenLightpink2,
         crystalImg,
         bowlImg,
         envelopeImg,
@@ -502,11 +565,26 @@ const Results = {
         levelInstance.assets.symbolLightpurple = symbolLightpurple;
         levelInstance.assets.symbolMidblue = symbolMidblue;
         levelInstance.assets.symbolRed = symbolRed;
+        levelInstance.assets.symbolLightpink2 = symbolLightpink2;
+        levelInstance.assets.symbolOrange2 = symbolOrange2;
+        levelInstance.assets.symbolYellow2 = symbolYellow2;
       }
       return;
     }
 
-    // Back to Start removed
+    // Back To Map
+    if (mx >= ba.x && mx <= ba.x + ba.w && my >= ba.y && my <= ba.y + ba.h) {
+      // Increment level counter if the player completed the level
+      if (Results._lastResult === "CORRECT") {
+        currentLevelNumber++;
+      }
+      // Reset the results animation state
+      Results._unfurlStart = null;
+      Results._lastResult = null;
+      // Switch to map screen
+      currentScreen = "map";
+      return;
+    }
   },
 
   // Reset animation state (call if you want a fresh unfurl on next show)

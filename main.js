@@ -21,6 +21,7 @@
 // Only one screen should be active at a time.
 
 let currentScreen = "start";
+let currentLevelNumber = 1; // Track the current level (starts at level 1)
 let levelData;
 let level;
 let levelInstance;
@@ -34,10 +35,13 @@ let levelBg,
   recipeBookOpen,
   recipeBookBg;
 let symbolBlack, symbolLightgreen, symbolLightpurple, symbolMidblue, symbolRed;
+let symbolLightpink2, symbolOrange2, symbolYellow2;
 let bottleGreen, bottleRed, bottleBlue, bottleOrange, bottlePink;
 let crystalImg, bowlImg, envelopeImg;
 let greenSymbol, blueSymbol, orangeSymbol;
 let mapIconsDefault, mapIconsHover;
+let mapIconsLevel2Default, mapIconsLevel2Hover;
+let mapIconsLevel3Default, mapIconsLevel3Hover;
 
 // Font names for use with textFont()
 const FONT_MANUFACTURING_CONSENT = "Manufacturing Consent";
@@ -68,7 +72,9 @@ function preload() {
   recipeBookOpen = loadImage("assets/recipe/open-recipe-book.svg");
 
   bottleBlack = loadImage("assets/vials/closed-black.svg");
+  bottleBlack2 = loadImage("assets/vials/closed-black2.svg");
   bottleDarkgreen = loadImage("assets/vials/closed-darkgreen.svg");
+  bottleDarkgreen2 = loadImage("assets/vials/closed-darkgreen2.svg");
   bottleDarkpurple = loadImage("assets/vials/closed-darkpurple.svg");
   bottleLightblue = loadImage("assets/vials/closed-lightblue.svg");
   bottleLightgreen = loadImage("assets/vials/closed-lightgreen.svg");
@@ -77,12 +83,18 @@ function preload() {
   bottleLightred = loadImage("assets/vials/closed-lightred.svg");
   bottleMidblue = loadImage("assets/vials/closed-midblue.svg");
   bottleClosedOrange = loadImage("assets/vials/closed-lightorange.svg");
+  bottleOrange2 = loadImage("assets/vials/closed-lightorange2.svg");
   bottleTeal = loadImage("assets/vials/closed-teal.svg");
   bottleYellow = loadImage("assets/vials/closed-yellow.svg");
+  bottleYellow2 = loadImage("assets/vials/closed-yellow2.svg");
+  bottleLightblue2 = loadImage("assets/vials/closed-lightblue2.svg");
+  bottleLightpink2 = loadImage("assets/vials/closed-lightpink2.svg");
 
   // Open variants (used when a vial is picked up)
   bottleOpenBlack = loadImage("assets/vials/open-black.svg");
+  bottleOpenBlack2 = loadImage("assets/vials/open-black2.svg");
   bottleOpenDarkgreen = loadImage("assets/vials/open-darkgreen.svg");
+  bottleOpenDarkgreen2 = loadImage("assets/vials/open-darkgreen2.svg");
   bottleOpenDarkpurple = loadImage("assets/vials/open-darkpurple.svg");
   bottleOpenLightblue = loadImage("assets/vials/open-lightblue.svg");
   bottleOpenLightgreen = loadImage("assets/vials/open-lightgreen.svg");
@@ -91,8 +103,12 @@ function preload() {
   bottleOpenLightred = loadImage("assets/vials/open-lightred.svg");
   bottleOpenMidblue = loadImage("assets/vials/open-midblue.svg");
   bottleOpenOrange = loadImage("assets/vials/open-orange.svg");
+  bottleOpenOrange2 = loadImage("assets/vials/open-orange2.svg");
   bottleOpenTeal = loadImage("assets/vials/open-teal.svg");
   bottleOpenYellow = loadImage("assets/vials/open-yellow.svg");
+  bottleOpenYellow2 = loadImage("assets/vials/open-yellow2.svg");
+  bottleOpenLightblue2 = loadImage("assets/vials/open-lightblue2.svg");
+  bottleOpenLightpink2 = loadImage("assets/vials/open-lightpink2.svg");
 
   crystalImg = loadImage("assets/crystal/crystal-v2.svg");
   // Use single brown bowl asset instead of split top/bottom pieces
@@ -107,10 +123,21 @@ function preload() {
   symbolLightpurple = loadImage("assets/symbols/symbol-lightpurple.svg");
   symbolMidblue = loadImage("assets/symbols/symbol-midblue.svg");
   symbolRed = loadImage("assets/symbols/symbol-red.svg");
+  symbolLightpink2 = loadImage("assets/symbols/symbol-lightpink2.svg");
+  symbolOrange2 = loadImage("assets/symbols/symbol-orange2.svg");
+  symbolYellow2 = loadImage("assets/symbols/symbol-yellow2.svg");
 
   // Map screen icons
   mapIconsDefault = loadImage("assets/background/map-icons-default.png");
   mapIconsHover = loadImage("assets/background/map-icons-hover.png");
+  mapIconsLevel2Default = loadImage(
+    "assets/background/map-icons-default-lvl2.png",
+  );
+  mapIconsLevel2Hover = loadImage("assets/background/map-icons-hover-lvl2.png");
+  mapIconsLevel3Default = loadImage(
+    "assets/background/map-icons-default-lvl3.png",
+  );
+  mapIconsLevel3Hover = loadImage("assets/background/map-icons-hover-lvl3.png");
 
   levelData = loadJSON("levels.json");
 
@@ -123,13 +150,10 @@ function preload() {
 }
 
 // ------------------------------
-// setup() runs ONCE at the beginning
-// ------------------------------
-// This is where you usually set canvas size and initial settings.
-function setup() {
-  pixelDensity(1);
-  createCanvas(windowWidth, windowHeight);
+// Helper function to create a fresh level instance
+function createLevelInstance() {
   levelInstance = new Level({
+    levelNumber: currentLevelNumber,
     cauldronImg,
     cauldronImgGlow,
     recipeBookClosed,
@@ -138,7 +162,9 @@ function setup() {
     orderSheet,
     blankOrderSheet2,
     bottleBlack,
+    bottleBlack2,
     bottleDarkgreen,
+    bottleDarkgreen2,
     bottleDarkpurple,
     bottleLightblue,
     bottleLightgreen,
@@ -147,11 +173,17 @@ function setup() {
     bottleLightred,
     bottleMidblue,
     bottleClosedOrange,
+    bottleOrange2,
     bottleTeal,
     bottleYellow,
+    bottleYellow2,
+    bottleLightblue2,
+    bottleLightpink2,
     // Open variants
     bottleOpenBlack,
+    bottleOpenBlack2,
     bottleOpenDarkgreen,
+    bottleOpenDarkgreen2,
     bottleOpenDarkpurple,
     bottleOpenLightblue,
     bottleOpenLightgreen,
@@ -160,8 +192,12 @@ function setup() {
     bottleOpenLightred,
     bottleOpenMidblue,
     bottleOpenOrange,
+    bottleOpenOrange2,
     bottleOpenTeal,
     bottleOpenYellow,
+    bottleOpenYellow2,
+    bottleOpenLightblue2,
+    bottleOpenLightpink2,
     crystalImg,
     bowlImg,
     envelopeImg,
@@ -180,6 +216,18 @@ function setup() {
   levelInstance.assets.symbolLightpurple = symbolLightpurple;
   levelInstance.assets.symbolMidblue = symbolMidblue;
   levelInstance.assets.symbolRed = symbolRed;
+  levelInstance.assets.symbolLightpink2 = symbolLightpink2;
+  levelInstance.assets.symbolOrange2 = symbolOrange2;
+  levelInstance.assets.symbolYellow2 = symbolYellow2;
+}
+
+// setup() runs ONCE at the beginning
+// ------------------------------
+// This is where you usually set canvas size and initial settings.
+function setup() {
+  pixelDensity(1);
+  createCanvas(windowWidth, windowHeight);
+  createLevelInstance();
 }
 
 function windowResized() {
@@ -238,6 +286,13 @@ function keyPressed() {
   else if (currentScreen === "instr") instrKeyPressed();
   else if (currentScreen === "map") mapKeyPressed();
   else if (currentScreen === "level") levelKeyPressed();
+}
+
+function mouseWheel(e) {
+  // Each screen *may* define a scroll handler:
+  // level.js         → levelMouseWheel()
+
+  if (currentScreen === "level") levelMouseWheel(e);
 }
 
 // ------------------------------------------------------------

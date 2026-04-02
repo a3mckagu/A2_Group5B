@@ -14,12 +14,22 @@ const MAP_ICON_FADE_SPEED = 0.08; // fade speed per frame
 // Toggle to show hit areas for debugging
 let SHOW_HIT_AREAS = false;
 
-// Level1 hit-area parameters (relative to map image center)
+// Level hit-area parameters (relative to map image center)
 // Final defaults (aligned to Level 1 artwork). Use debug keys if needed.
 // Values chosen from interactive tuning overlay.
 let level1RelX = -0.4; // negative = left
 let level1RelY = 0.295; // positive = down
 let level1RelDiameter = 0.18;
+
+// Level 2 hitbox is 30px to the right of Level 1
+let level2RelX = -0.4 + 0.0386; // ~30px shift (30/778 ≈ 0.0386)
+let level2RelY = 0.295;
+let level2RelDiameter = 0.18;
+
+// Level 3 hitbox is 60px to the right of Level 1 (30px right from Level 2)
+let level3RelX = -0.4 + 0.0772; // ~60px shift (60/778 ≈ 0.0772)
+let level3RelY = 0.295;
+let level3RelDiameter = 0.18;
 
 function drawMap() {
   background(0);
@@ -37,23 +47,96 @@ function drawMap() {
 
   // Draw map icons image centered in the middle of the screen
   const mapIconWidth = 778;
-  const mapIconAspectRatio = mapIconsDefault.height / mapIconsDefault.width;
+
+  // Select the correct map icons based on current level
+  let currentDefaultIcons,
+    currentHoverIcons,
+    currentRelX,
+    currentRelY,
+    currentRelDiameter,
+    hitboxType = "circle",
+    hitboxOffsetX = 0,
+    hitboxOffsetY = 0,
+    hitboxW = 0,
+    hitboxH = 0;
+
+  if (currentLevelNumber === 1) {
+    currentDefaultIcons = mapIconsDefault;
+    currentHoverIcons = mapIconsHover;
+    currentRelX = level1RelX;
+    currentRelY = level1RelY;
+    currentRelDiameter = level1RelDiameter;
+    hitboxType = "circle";
+  } else if (currentLevelNumber === 2) {
+    currentDefaultIcons = mapIconsLevel2Default;
+    currentHoverIcons = mapIconsLevel2Hover;
+    hitboxType = "rect";
+    hitboxOffsetX = -155;
+    hitboxOffsetY = -34;
+    hitboxW = 118;
+    hitboxH = 175;
+  } else {
+    // Level 3+
+    currentDefaultIcons = mapIconsLevel3Default;
+    currentHoverIcons = mapIconsLevel3Hover;
+    hitboxType = "square";
+    hitboxOffsetX = 48;
+    hitboxOffsetY = 80;
+    hitboxW = 138;
+    hitboxH = 138;
+  }
+
+  const mapIconAspectRatio =
+    currentDefaultIcons.height / currentDefaultIcons.width;
   const mapIconHeight = mapIconWidth * mapIconAspectRatio;
   const mapIconX = BASE_W / 2;
   const mapIconY = BASE_H / 2;
-  // Check if mouse is hovering over the Level 1 circle (in base coordinates)
+  // Check if mouse is hovering over the level hitbox (in base coordinates)
   const adjustedMX = (mouseX - offsetX) / scaleFactor;
   const adjustedMY = (mouseY - offsetY) / scaleFactor;
 
-  // Level 1 circle hit area (positioned relative to the map icons image)
-  const level1X = mapIconX + mapIconWidth * level1RelX;
-  const level1Y = mapIconY + mapIconHeight * level1RelY;
-  const level1Diameter = mapIconWidth * level1RelDiameter;
+  // Calculate hitbox position based on level type
+  let levelX, levelY, isHovering;
 
-  const dx = adjustedMX - level1X;
-  const dy = adjustedMY - level1Y;
-  const distToLevel1 = Math.sqrt(dx * dx + dy * dy);
-  const isHovering = distToLevel1 <= level1Diameter / 2;
+  if (currentLevelNumber === 1) {
+    // Level 1: Circle hitbox at center position
+    levelX = mapIconX + mapIconWidth * currentRelX;
+    levelY = mapIconY + mapIconHeight * currentRelY;
+    const levelDiameter = mapIconWidth * currentRelDiameter;
+
+    const dx = adjustedMX - levelX;
+    const dy = adjustedMY - levelY;
+    const distToLevel = Math.sqrt(dx * dx + dy * dy);
+    isHovering = distToLevel <= levelDiameter / 2;
+  } else if (currentLevelNumber === 2) {
+    // Level 2: Rectangle hitbox with pixel offsets
+    levelX = mapIconX + hitboxOffsetX;
+    levelY = mapIconY + hitboxOffsetY;
+    const rectLeft = levelX - hitboxW / 2;
+    const rectTop = levelY - hitboxH / 2;
+    const rectRight = levelX + hitboxW / 2;
+    const rectBottom = levelY + hitboxH / 2;
+
+    isHovering =
+      adjustedMX >= rectLeft &&
+      adjustedMX <= rectRight &&
+      adjustedMY >= rectTop &&
+      adjustedMY <= rectBottom;
+  } else {
+    // Level 3+: Square hitbox with pixel offsets
+    levelX = mapIconX + hitboxOffsetX;
+    levelY = mapIconY + hitboxOffsetY;
+    const squareLeft = levelX - hitboxW / 2;
+    const squareTop = levelY - hitboxH / 2;
+    const squareRight = levelX + hitboxW / 2;
+    const squareBottom = levelY + hitboxH / 2;
+
+    isHovering =
+      adjustedMX >= squareLeft &&
+      adjustedMX <= squareRight &&
+      adjustedMY >= squareTop &&
+      adjustedMY <= squareBottom;
+  }
 
   // Debug: draw the hit area so we can visually tune it
   if (SHOW_HIT_AREAS) {
@@ -61,13 +144,20 @@ function drawMap() {
     noFill();
     stroke(255, 0, 0, 180);
     strokeWeight(2 / scaleFactor); // keep visible across scales
-    ellipseMode(CENTER);
-    ellipse(level1X, level1Y, level1Diameter, level1Diameter);
-    // mark center
-    fill(255, 0, 0, 200);
-    noStroke();
-    const centerSize = 6 / scaleFactor;
-    ellipse(level1X, level1Y, centerSize, centerSize);
+    if (currentLevelNumber === 1) {
+      // Circle for Level 1
+      const levelDiameter = mapIconWidth * currentRelDiameter;
+      ellipseMode(CENTER);
+      ellipse(levelX, levelY, levelDiameter, levelDiameter);
+      fill(255, 0, 0, 200);
+      noStroke();
+      const centerSize = 6 / scaleFactor;
+      ellipse(levelX, levelY, centerSize, centerSize);
+    } else {
+      // Rectangle or Square for Level 2+
+      rectMode(CENTER);
+      rect(levelX, levelY, hitboxW, hitboxH, 10);
+    }
     pop();
   }
   // Debug overlay with current params (screen coords)
@@ -75,17 +165,23 @@ function drawMap() {
     push();
     noStroke();
     fill(0, 0, 0, 140);
-    const boxW = 300;
-    const boxH = 90;
+    let debugText = "";
+    let boxH = 70;
+
+    if (currentLevelNumber === 1) {
+      boxH = 90;
+      debugText = `LEVEL 1 (Circle)\nA/D: left/right  W/X: up/down  Q/E: smaller/larger\nrelX: ${currentRelX.toFixed(3)}  relY: ${currentRelY.toFixed(3)}  relD: ${currentRelDiameter.toFixed(3)}`;
+    } else {
+      boxH = 70;
+      debugText = `LEVEL ${currentLevelNumber} (${currentLevelNumber === 2 ? "Rectangle" : "Square"})\nOffset: (${hitboxOffsetX}, ${hitboxOffsetY})  Size: ${hitboxW}x${hitboxH}`;
+    }
+
+    const boxW = 380;
     rect(16, height - boxH - 16, boxW, boxH, 8);
     fill(255);
     textAlign(LEFT, TOP);
     textSize(12);
-    text(
-      `A/D: left/right  W/X: up/down  Q/E: smaller/larger\nrelX: ${level1RelX.toFixed(3)}  relY: ${level1RelY.toFixed(3)}  relD: ${level1RelDiameter.toFixed(3)}`,
-      24,
-      height - boxH - 8,
-    );
+    text(debugText, 24, height - boxH - 8);
     pop();
   }
 
@@ -98,12 +194,13 @@ function drawMap() {
 
   // Draw default image
   imageMode(CENTER);
-  image(mapIconsDefault, mapIconX, mapIconY, mapIconWidth, mapIconHeight);
+  image(currentDefaultIcons, mapIconX, mapIconY, mapIconWidth, mapIconHeight);
 
   // Draw hover image on top with fade opacity (only when fading > 0)
   if (mapIconHoverFade > 0) {
+    5;
     tint(255, mapIconHoverFade * 255);
-    image(mapIconsHover, mapIconX, mapIconY, mapIconWidth, mapIconHeight);
+    image(currentHoverIcons, mapIconX, mapIconY, mapIconWidth, mapIconHeight);
     noTint();
   }
 
@@ -128,6 +225,8 @@ function drawMap() {
 // ------------------------------------------------------------
 // Called from main.js only when currentScreen === "map"
 function mapMousePressed() {
+  // Create a fresh level instance and transition to gameplay
+  createLevelInstance();
   currentScreen = "level";
 }
 
