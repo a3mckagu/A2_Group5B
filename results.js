@@ -501,6 +501,7 @@ const Results = {
       levelInstance = new Level({
         levelNumber: currentLevelNumber,
         cauldronImg,
+        cauldronImgGlow,
         recipeBookClosed,
         recipeBookOpen,
         levelBg,
@@ -546,6 +547,7 @@ const Results = {
         crystalImg,
         bowlImg,
         envelopeImg,
+        spoonImg,
         greenSymbol,
         blueSymbol,
         orangeSymbol,

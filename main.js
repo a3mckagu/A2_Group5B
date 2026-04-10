@@ -33,7 +33,8 @@ let levelBg,
   cauldronImg,
   recipeBookClosed,
   recipeBookOpen,
-  recipeBookBg;
+  recipeBookBg,
+  spoonImg;
 let symbolBlack, symbolLightgreen, symbolLightpurple, symbolMidblue, symbolRed;
 let symbolLightpink2, symbolOrange2, symbolYellow2;
 let bottleGreen, bottleRed, bottleBlue, bottleOrange, bottlePink;
@@ -68,6 +69,7 @@ function preload() {
   blankOrderSheet2 = loadImage("assets/order/blank-order-sheet-2.png");
   cauldronImg = loadImage("assets/cauldron/cauldron-default-state.png");
   cauldronImgGlow = loadImage("assets/cauldron/cauldron-glow-state.png");
+  spoonImg = loadImage("assets/cauldron/spoon.png");
   recipeBookClosed = loadImage("assets/recipe/recipe-book-default-state.png");
   recipeBookOpen = loadImage("assets/recipe/open-recipe-book.svg");
 
@@ -147,6 +149,11 @@ function preload() {
   document.fonts.load('16px "VT323"');
   document.fonts.load('16px "Monsieur La Doulaise"');
   document.fonts.load('16px "Voces"');
+
+  // Note: Sound effects are preloaded as <audio> elements in index.html:
+  // - assets/sound/stirring.mp3 (for spoon mixing)
+  // - assets/sound/crystal-shine.mp3 (for crystal pickup, at 55% volume)
+  // - assets/sound/glass-cling.mp3 (for vial pickups at 50%, and returns at 40%)
 }
 
 // ------------------------------
@@ -201,6 +208,7 @@ function createLevelInstance() {
     crystalImg,
     bowlImg,
     envelopeImg,
+    spoonImg,
     greenSymbol,
     blueSymbol,
     orangeSymbol,
@@ -246,32 +254,6 @@ function jumpToLevel2SecondRecipe() {
   levelInstance.sequenceResultsToDisplay = [];
   levelInstance.addedIngredients = [];
   levelInstance.crystalAdded = false;
-}
-
-function handleGlobalDebugShortcut() {
-  if (key === "0") {
-    jumpToLevel2SecondRecipe();
-    return true;
-  }
-
-  if (key === "1" || key === "2") {
-    jumpToLevel(Number(key));
-    return true;
-  }
-
-  const shortcut = {
-    a: { levelNumber: 1, resultType: "CORRECT" },
-    b: { levelNumber: 1, resultType: "WRONG" },
-    c: { levelNumber: 1, resultType: "TIMEOUT" },
-    d: { levelNumber: 2, resultType: "CORRECT" },
-    e: { levelNumber: 2, resultType: "WRONG" },
-    f: { levelNumber: 2, resultType: "TIMEOUT" },
-  }[key.toLowerCase()];
-
-  if (!shortcut) return false;
-
-  jumpToLevelResult(shortcut.levelNumber, shortcut.resultType);
-  return true;
 }
 
 // setup() runs ONCE at the beginning
@@ -323,19 +305,29 @@ function mousePressed() {
   else if (currentScreen === "map") mapMousePressed();
   else if (currentScreen === "level") levelMousePressed();
 }
+
+// ------------------------------
+// mouseReleased() runs once each time the mouse is released
+// ------------------------------
+function mouseReleased() {
+  // Release the spoon when mouse button is released
+  if (currentScreen === "level" && levelInstance) {
+    levelInstance.spoonIsHeld = false;
+  }
+}
+
 // ------------------------------
 // keyPressed() runs once each time a key is pressed
 // ------------------------------
 // This routes keyboard input to the correct screen handler.
 function keyPressed() {
-  if (handleGlobalDebugShortcut()) {
-    return;
-  }
-
-  if (
-    typeof handleMapDebugShortcut === "function" &&
-    handleMapDebugShortcut()
-  ) {
+  // Handle escape key globally
+  if (keyCode === ESCAPE) {
+    if (currentScreen === "level") {
+      currentScreen = "map";
+    } else if (currentScreen === "map") {
+      currentScreen = "start";
+    }
     return;
   }
 

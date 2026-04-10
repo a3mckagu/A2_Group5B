@@ -11,8 +11,6 @@ const BASE_H = 648;
 // Hover animation state for map icons fade
 let mapIconHoverFade = 0;
 const MAP_ICON_FADE_SPEED = 0.08; // fade speed per frame
-// Toggle to show hit areas for debugging
-let SHOW_HIT_AREAS = false;
 
 // Level hit-area parameters (relative to map image center)
 // Final defaults (aligned to Level 1 artwork). Use debug keys if needed.
@@ -167,51 +165,7 @@ function drawMap() {
   textAlign(CENTER, CENTER);
   text("Alchemy Map", BASE_W / 2, BASE_H * 0.14);
 
-  // Debug: draw the hit area on top of the map so it stays visible.
-  if (SHOW_HIT_AREAS) {
-    push();
-    noFill();
-    stroke(255, 0, 0, 180);
-    strokeWeight(2 / scaleFactor);
-    if (currentLevelNumber === 1) {
-      const levelDiameter = mapIconWidth * currentRelDiameter;
-      ellipseMode(CENTER);
-      ellipse(levelX, levelY, levelDiameter, levelDiameter);
-      fill(255, 0, 0, 200);
-      noStroke();
-      const centerSize = 6 / scaleFactor;
-      ellipse(levelX, levelY, centerSize, centerSize);
-    } else {
-      rectMode(CENTER);
-      rect(levelX, levelY, hitboxW, hitboxH, 10);
-    }
-    pop();
-  }
-
   pop();
-
-  if (SHOW_HIT_AREAS) {
-    push();
-    noStroke();
-    fill(0, 0, 0, 160);
-    let debugText = "";
-    let boxH = 86;
-
-    if (currentLevelNumber === 1) {
-      boxH = 104;
-      debugText = `LEVEL 1 (Circle)\nJ/L: left/right  I/K: up/down  N/M: smaller/larger\nH: toggle  P: save  O: load\nrelX: ${level1RelX.toFixed(3)}  relY: ${level1RelY.toFixed(3)}  relD: ${level1RelDiameter.toFixed(3)}`;
-    } else {
-      debugText = `LEVEL ${currentLevelNumber} (${currentLevelNumber === 2 ? "Rectangle" : "Square"})\nH: toggle overlay\nOffset: (${hitboxOffsetX}, ${hitboxOffsetY})  Size: ${hitboxW}x${hitboxH}`;
-    }
-
-    const boxW = 430;
-    rect(16, height - boxH - 16, boxW, boxH, 8);
-    fill(255);
-    textAlign(LEFT, TOP);
-    textSize(12);
-    text(debugText, 24, height - boxH - 8);
-    pop();
-  }
 
   if (isHovering) cursor(HAND);
   else cursor(ARROW);
@@ -227,77 +181,13 @@ function mapMousePressed() {
   currentScreen = "level";
 }
 
-function handleMapDebugShortcut() {
-  const lowerKey = key.toLowerCase();
-
-  if (lowerKey === "h") {
-    SHOW_HIT_AREAS = !SHOW_HIT_AREAS;
-    currentScreen = "map";
-    return true;
-  }
-
-  if (currentScreen !== "map" || !SHOW_HIT_AREAS) return false;
-
-  if (lowerKey === "j") {
-    level1RelX -= 0.005;
-    return true;
-  }
-  if (lowerKey === "l") {
-    level1RelX += 0.005;
-    return true;
-  }
-  if (lowerKey === "i") {
-    level1RelY -= 0.005;
-    return true;
-  }
-  if (lowerKey === "k") {
-    level1RelY += 0.005;
-    return true;
-  }
-  if (lowerKey === "n") {
-    level1RelDiameter = max(0.01, level1RelDiameter - 0.005);
-    return true;
-  }
-  if (lowerKey === "m") {
-    level1RelDiameter = min(0.8, level1RelDiameter + 0.005);
-    return true;
-  }
-  if (lowerKey === "p") {
-    try {
-      localStorage.setItem(
-        "level1Hit",
-        JSON.stringify({ level1RelX, level1RelY, level1RelDiameter }),
-      );
-      console.log("Saved level1 hit values", {
-        level1RelX,
-        level1RelY,
-        level1RelDiameter,
-      });
-    } catch (e) {}
-    return true;
-  }
-  if (lowerKey === "o") {
-    try {
-      const raw = localStorage.getItem("level1Hit");
-      if (raw) {
-        const obj = JSON.parse(raw);
-        level1RelX = obj.level1RelX;
-        level1RelY = obj.level1RelY;
-        level1RelDiameter = obj.level1RelDiameter;
-      }
-    } catch (e) {}
-    return true;
-  }
-
-  return false;
-}
-
 // ------------------------------------------------------------
 // Keyboard input for the map screen
 // ------------------------------------------------------------
 // Provides keyboard shortcuts:
 // - ENTER starts the game
-// - I opens instructions
+// - S returns to start menu
+// - ESC returns to start menu (handled globally)
 function mapKeyPressed() {
   if (keyCode === ENTER) {
     currentScreen = "level";
@@ -306,10 +196,6 @@ function mapKeyPressed() {
   if (key === "s" || key === "S") {
     currentScreen = "start";
   }
-
-  if (handleMapDebugShortcut()) return;
-
-  // ESC to return disabled temporarily
 }
 
 // ------------------------------------------------------------

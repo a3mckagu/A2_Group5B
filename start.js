@@ -48,7 +48,7 @@ function drawStart() {
     y: height * 0.52,
     w: btnWidth1,
     h: btnHeight,
-    label: "New Game",
+    label: currentLevelNumber > 1 ? "Resume" : "New Game",
   };
 
   const instrBtn = {
@@ -63,7 +63,7 @@ function drawStart() {
     y: height * 0.68,
     w: btnWidth1,
     h: btnHeight,
-    label: "Quit",
+    label: currentLevelNumber > 1 ? "Restart" : "Quit",
   };
 
   // Draw both buttons
@@ -117,7 +117,12 @@ function startMousePressed() {
   else if (isHover(instrBtn)) {
     currentScreen = "instr";
   } else if (isHover(quitBtn)) {
-    window.close();
+    // If past level 1, reload the page; otherwise close the window
+    if (currentLevelNumber > 1) {
+      location.reload();
+    } else {
+      window.close();
+    }
   }
 }
 

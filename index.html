@@ -19,6 +19,15 @@
     <script src="https://cdn.jsdelivr.net/npm/p5@1/lib/p5.min.js"></script>
     <!-- Background music (loops). We attempt autoplay and fall back to first user interaction if blocked. -->
     <audio id="bg-music" src="assets/sound/medieval-music.mp3" loop></audio>
+    <!-- Stirring sound effect (played when user stirs the spoon) -->
+    <audio id="stirring-sound" src="assets/sound/stirring.mp3"></audio>
+    <!-- Crystal shine sound effect (played when picking up the crystal) -->
+    <audio
+      id="crystal-shine-sound"
+      src="assets/sound/crystal-shine.mp3"
+    ></audio>
+    <!-- Glass cling sound effect (played when picking up any potion vial) -->
+    <audio id="glass-cling-sound" src="assets/sound/glass-cling.mp3"></audio>
     <script>
       (function () {
         const bg = document.getElementById("bg-music");
