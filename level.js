@@ -741,7 +741,8 @@ class Level {
       textStyle(ITALIC);
       textSize(26);
       fill(245, 225, 180);
-      const quote = "The lights have gone out.\nGood thing you have a candle.";
+      const quote =
+        "The lights have gone out...\ngood thing you have a candle.";
       text(quote, cx, y);
 
       // Button placed inside the dialog near the lower-middle area
