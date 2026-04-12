@@ -261,6 +261,28 @@ function jumpToLevel(levelNumber) {
   currentLevelNumber = levelNumber;
   createLevelInstance();
   currentScreen = "level";
+  try {
+    if (typeof restoreBgMusicVolume === "function") restoreBgMusicVolume();
+  } catch (e) {}
+}
+
+// Restore background music volume to the original level (if previously reduced).
+function restoreBgMusicVolume() {
+  try {
+    const bg = document.getElementById("bg-music");
+    if (!bg) return;
+    const orig =
+      typeof window._bgMusicOriginalVolume === "number"
+        ? window._bgMusicOriginalVolume
+        : 0.25;
+    try {
+      bg.volume = orig;
+    } catch (e) {}
+    // If music is paused, try to resume playback.
+    if (bg.paused) {
+      bg.play().catch(() => {});
+    }
+  } catch (e) {}
 }
 
 function jumpToLevelResult(levelNumber, resultType) {
@@ -309,6 +331,7 @@ function draw() {
 
   if (currentScreen === "start") drawStart();
   else if (currentScreen === "instr") drawInstr();
+  else if (currentScreen === "finish") drawEnd();
   else if (currentScreen === "map") drawMap();
   else if (currentScreen === "level") drawLevel();
 
@@ -331,6 +354,7 @@ function mousePressed() {
   console.log("[main.js mousePressed] Called - currentScreen:", currentScreen);
   if (currentScreen === "start") startMousePressed();
   else if (currentScreen === "instr") instrMousePressed();
+  else if (currentScreen === "finish") endMousePressed();
   else if (currentScreen === "map") mapMousePressed();
   else if (currentScreen === "level") {
     console.log("[main.js] Routing to levelMousePressed");
@@ -357,6 +381,9 @@ function keyPressed() {
   if (keyCode === ESCAPE) {
     if (currentScreen === "level") {
       currentScreen = "map";
+      try {
+        restoreBgMusicVolume();
+      } catch (e) {}
     } else if (currentScreen === "map") {
       currentScreen = "start";
     }
@@ -504,6 +531,7 @@ function keyPressed() {
 
   if (currentScreen === "start") startKeyPressed();
   else if (currentScreen === "instr") instrKeyPressed();
+  else if (currentScreen === "finish") endKeyPressed();
   else if (currentScreen === "map") mapKeyPressed();
   else if (currentScreen === "level") levelKeyPressed();
 }

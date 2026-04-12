@@ -27,9 +27,60 @@ const Results = {
   draw: function (type) {
     if (!type) return;
 
-    // Reset animation when result type changes
+    // Reset animation, stop background music, and play a one-off sound when
+    // the result type first appears.
     if (type !== Results._lastResult) {
       Results._unfurlStart = millis();
+      // Reduce background music volume so result audio is prominent
+      try {
+        const bg = document.getElementById("bg-music");
+        if (bg) {
+          const fadeDuration = 600; // ms
+          const steps = 30;
+          const stepTime = Math.max(10, Math.floor(fadeDuration / steps));
+          const startVol = typeof bg.volume === "number" ? bg.volume : 1.0;
+          const targetVol = 0.05; // reduce to 5% volume
+          if (startVol <= targetVol) {
+            try {
+              bg.volume = targetVol;
+            } catch (e) {}
+          } else {
+            let currentStep = 0;
+            const fadeInterval = setInterval(() => {
+              currentStep++;
+              const t = Math.min(1, currentStep / steps);
+              const newVol = Math.max(
+                targetVol,
+                startVol + (targetVol - startVol) * t,
+              );
+              try {
+                bg.volume = newVol;
+              } catch (e) {}
+              if (currentStep >= steps) {
+                clearInterval(fadeInterval);
+              }
+            }, stepTime);
+          }
+        }
+      } catch (e) {
+        // ignore
+      }
+
+      // Play corresponding result sound once on first reveal
+      const playResultSound = (id) => {
+        const s = document.getElementById(id);
+        if (s) {
+          s.currentTime = 0;
+          s.volume = 1.0;
+          s.loop = false;
+          s.play().catch(() => {});
+        }
+      };
+
+      if (type === "CORRECT") playResultSound("correct-sound");
+      else if (type === "WRONG") playResultSound("wrong-sound");
+      else playResultSound("timeout-sound");
+
       Results._lastResult = type;
     }
 
@@ -81,6 +132,15 @@ const Results = {
           "At last! Prince Dorian won't know what hit him...\nI must clear my schedule, I have bridal fittings to arrange!";
         attrText = "\u2014 Lady Beaumont, beaming with joy (and delusion)";
       }
+      // Level 3 override
+      if (
+        typeof levelInstance !== "undefined" &&
+        levelInstance.levelNumber === 3
+      ) {
+        quoteText =
+          "You have saved my Queen! The doors of the\ncastle shall forever be open to you.";
+        attrText = "\u2014 King Percival, overcome with gratitude";
+      }
       btnLabel = "PLAY AGAIN";
     } else if (type === "WRONG") {
       faceHi = color(68, 0, 0); // #440000
@@ -106,6 +166,15 @@ const Results = {
         quoteText =
           "This is NOT Sparks Fly! How am I supposed to win\nPrince Dorian's heart with this sludge?!";
         attrText = "\u2014 Lady Beaumont, beside herself";
+      }
+      // Level 3 override
+      if (
+        typeof levelInstance !== "undefined" &&
+        levelInstance.levelNumber === 3
+      ) {
+        quoteText =
+          "Do you take me for a fool? This is no remedy!\nMy Queen's life depended on you...and you have failed her.";
+        attrText = "\u2014 King Percival, devastated";
       }
       btnLabel = "TRY AGAIN";
     } else {
@@ -133,6 +202,15 @@ const Results = {
         quoteText =
           "Every second without this potion is a second\nPrince Dorian slips further from my grasp!";
         attrText = "\u2014 Lady Beaumont, spiralling";
+      }
+      // Level 3 override
+      if (
+        typeof levelInstance !== "undefined" &&
+        levelInstance.levelNumber === 3
+      ) {
+        quoteText =
+          "My Queen’s life is in peril! Since you cannot\nsucceed in time, I will find another who can.";
+        attrText = "\u2014 King Percival, tense with impatience";
       }
       btnLabel = "TRY AGAIN";
     }
@@ -491,9 +569,15 @@ const Results = {
       Results._playAgainBtn = { x: 0, y: 0, w: 0, h: 0 }; // disable
     }
 
-    // Draw Back To Map button (always)
+    // Draw Back To Map / Finish button (always)
+    const backLabel =
+      resultType === "CORRECT" &&
+      typeof levelInstance !== "undefined" &&
+      levelInstance.levelNumber === 3
+        ? "FINISH"
+        : "BACK TO MAP";
     Results._backToMapBtn = { x: btnX, y: btnY2, w: btnW, h: btnH };
-    drawButton(btnX, btnY2, btnW, btnH, "BACK TO MAP", trimCol, innerBorder);
+    drawButton(btnX, btnY2, btnW, btnH, backLabel, trimCol, innerBorder);
 
     pop();
   },
@@ -541,17 +625,30 @@ const Results = {
       return;
     }
 
-    // Back To Map
+    // Back To Map / Finish
     if (mx >= ba.x && mx <= ba.x + ba.w && my >= ba.y && my <= ba.y + ba.h) {
-      // Increment level counter if the player completed the level
-      if (Results._lastResult === "CORRECT") {
+      // Capture the last result, then reset animation state
+      const lastResult = Results._lastResult;
+      if (lastResult === "CORRECT") {
         currentLevelNumber++;
       }
-      // Reset the results animation state
       Results._unfurlStart = null;
       Results._lastResult = null;
-      // Switch to map screen
-      currentScreen = "map";
+
+      // For Level 3 success, route to the Finish screen; otherwise go to map
+      if (
+        lastResult === "CORRECT" &&
+        typeof levelInstance !== "undefined" &&
+        levelInstance.levelNumber === 3
+      ) {
+        currentScreen = "finish";
+      } else {
+        currentScreen = "map";
+      }
+
+      try {
+        if (typeof restoreBgMusicVolume === "function") restoreBgMusicVolume();
+      } catch (e) {}
       return;
     }
   },

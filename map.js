@@ -129,14 +129,22 @@ function drawMap() {
   const adjustedMX = (mouseX - offsetX) / scaleFactor;
   const adjustedMY = (mouseY - offsetY) / scaleFactor;
 
-  // Determine if hovering based on current level's hitbox
+  // Determine if hovering over any unlocked level's hitbox
   let isHovering = false;
-  if (currentLevelNumber === 1) {
-    isHovering = isPointInLevel1Circle(adjustedMX, adjustedMY);
-  } else if (currentLevelNumber === 2) {
-    isHovering = isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL2_HITBOX);
-  } else {
-    isHovering = isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL3_HITBOX);
+  if (currentLevelNumber >= 1 && isPointInLevel1Circle(adjustedMX, adjustedMY)) {
+    isHovering = true;
+  }
+  if (
+    currentLevelNumber >= 2 &&
+    isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL2_HITBOX)
+  ) {
+    isHovering = true;
+  }
+  if (
+    currentLevelNumber >= 3 &&
+    isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL3_HITBOX)
+  ) {
+    isHovering = true;
   }
 
   // Update fade animation based on hover state
@@ -215,26 +223,26 @@ function mapMousePressed() {
     return;
   }
 
-  // Check if click is on the current level's hitbox
-  let clickedOnLevel = false;
-  if (currentLevelNumber === 1) {
-    clickedOnLevel = isPointInLevel1Circle(adjustedMX, adjustedMY);
-  } else if (currentLevelNumber === 2) {
-    clickedOnLevel = isPointInNormanWindow(
-      adjustedMX,
-      adjustedMY,
-      LEVEL2_HITBOX,
-    );
-  } else {
-    clickedOnLevel = isPointInNormanWindow(
-      adjustedMX,
-      adjustedMY,
-      LEVEL3_HITBOX,
-    );
+  // Determine which unlocked level (if any) was clicked and start it
+  let clickedLevel = 0;
+  if (isPointInLevel1Circle(adjustedMX, adjustedMY) && currentLevelNumber >= 1) {
+    clickedLevel = 1;
+  }
+  if (
+    isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL2_HITBOX) &&
+    currentLevelNumber >= 2
+  ) {
+    clickedLevel = 2;
+  }
+  if (
+    isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL3_HITBOX) &&
+    currentLevelNumber >= 3
+  ) {
+    clickedLevel = 3;
   }
 
-  // Only start the game if clicking on the hitbox
-  if (clickedOnLevel) {
+  if (clickedLevel > 0) {
+    currentLevelNumber = clickedLevel;
     createLevelInstance();
     currentScreen = "level";
   }

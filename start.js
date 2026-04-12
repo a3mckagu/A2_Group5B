@@ -112,6 +112,9 @@ function startMousePressed() {
   // If START is clicked, go to the map screen
   if (isHover(startBtn)) {
     currentScreen = "map";
+    try {
+      restoreBgMusicVolume();
+    } catch (e) {}
   }
   // If GUIDE is clicked, go to the instructions screen
   else if (isHover(instrBtn)) {
@@ -135,6 +138,9 @@ function startMousePressed() {
 function startKeyPressed() {
   if (keyCode === ENTER) {
     currentScreen = "map";
+    try {
+      restoreBgMusicVolume();
+    } catch (e) {}
   }
 
   if (key === "g" || key === "G") {

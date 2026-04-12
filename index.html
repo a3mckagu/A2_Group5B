@@ -35,6 +35,12 @@
     ></audio>
     <!-- Paper sound effect (played when recipe is opened or envelope is clicked) -->
     <audio id="paper-sound" src="assets/sound/paper.mp3"></audio>
+    <!-- Page-flip sound effect (played when envelope is clicked) -->
+    <audio id="page-flip-sound" src="assets/sound/page-flip.mp3"></audio>
+    <!-- Result sounds -->
+    <audio id="correct-sound" src="assets/sound/correct.mp3"></audio>
+    <audio id="wrong-sound" src="assets/sound/wrong.mp3"></audio>
+    <audio id="timeout-sound" src="assets/sound/timeout.mp3"></audio>
     <script>
       (function () {
         const bg = document.getElementById("bg-music");
@@ -68,6 +74,7 @@
     <!-- your existing files (order matters) -->
     <script src="start.js"></script>
     <script src="instructions.js"></script>
+    <script src="end.js"></script>
     <script src="map.js"></script>
     <script src="results.js"></script>
     <script src="level.js"></script>

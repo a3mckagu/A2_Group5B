@@ -932,14 +932,10 @@ class Level {
       }
 
       // Update background music playback rate based on remaining patience
-      // As time runs low, speed up the music incrementally
-      // Speed scaling varies by level:
-      // Levels 1 & 2: 1.0x (full) → 1.10x (half) → 1.3x (empty)
-      // Level 3: 1.0x (full) → 1.25x (half) → 1.5x (empty)
-      let maxPlaybackRate = 1.3; // default for levels 1 & 2
-      if (this.levelNumber === 3) {
-        maxPlaybackRate = 1.5;
-      }
+      // As time runs low, speed up the music incrementally. Use the same
+      // maximum playback rate for all levels for consistent behaviour.
+      // 1.0x (full patience) → 1.3x (empty)
+      const maxPlaybackRate = 1.3;
       const musicPlaybackRate = lerp(
         maxPlaybackRate,
         1.0,
@@ -1420,7 +1416,8 @@ class Level {
     // Draw spoon centered on screen with height set to half page height, width auto
     // Only visible within the red oval
     // Drawn before vials so vials appear on top
-    if (this.assets.spoonImg) {
+    // Only show spoon for Levels 2 and 3 (hide on Level 1)
+    if (this.assets.spoonImg && this.levelNumber !== 1) {
       const spoonHeight = BASE_HEIGHT / 5; //spoon
       const spoonAspectRatio =
         this.assets.spoonImg.width / this.assets.spoonImg.height;
@@ -3978,165 +3975,173 @@ function levelMousePressed() {
   }
 
   // ---- Spoon Click (moved early) ----
-  // Use the current displayed spoon position when held, otherwise use base coords.
-  const spoonDetectX =
-    levelInstance.spoonIsHeld && levelInstance.spoonDisplayX
-      ? levelInstance.spoonDisplayX
-      : levelInstance.spoonX;
-  const spoonDetectY =
-    levelInstance.spoonY +
-    (levelInstance.spoonLift || 0) +
-    (typeof SPOON_HITBOX_Y_OFFSET !== "undefined" ? SPOON_HITBOX_Y_OFFSET : 0);
-  // If the spoon is currently held, any click should drop it (user requested).
-  if (levelInstance.spoonIsHeld) {
-    // Drop spoon and reset tracking immediately regardless of click location
-    levelInstance.spoonIsHeld = false;
-    levelInstance.isActivelyStirring = false;
-    levelInstance.holdNoMovementStartFrame = null;
-    if (levelInstance.stirringSound && !levelInstance.stirringSound.paused) {
-      levelInstance.stirringSound.pause();
-      levelInstance.stirringSound.currentTime = 0;
-    }
-    // If player started mixing at the correct step but didn't finish,
-    // mark the sequence invalid (partial mixes are not allowed).
-    if (
-      levelInstance.levelNumber === 2 &&
-      levelInstance.mixStartedWhenAtMixStep &&
-      !levelInstance.mixMeterComplete
-    ) {
-      const expectedMixIndex = 4;
-      if ((levelInstance.addedIngredients || []).length === expectedMixIndex) {
-        levelInstance.sequenceInvalid = true;
-        console.log(
-          "Partial mix (unfinished) at required step — sequence marked invalid",
-        );
+  // Skip spoon interactions on Level 1
+  if (levelInstance.levelNumber !== 1) {
+    // Use the current displayed spoon position when held, otherwise use base coords.
+    const spoonDetectX =
+      levelInstance.spoonIsHeld && levelInstance.spoonDisplayX
+        ? levelInstance.spoonDisplayX
+        : levelInstance.spoonX;
+    const spoonDetectY =
+      levelInstance.spoonY +
+      (levelInstance.spoonLift || 0) +
+      (typeof SPOON_HITBOX_Y_OFFSET !== "undefined"
+        ? SPOON_HITBOX_Y_OFFSET
+        : 0);
+    // If the spoon is currently held, any click should drop it (user requested).
+    if (levelInstance.spoonIsHeld) {
+      // Drop spoon and reset tracking immediately regardless of click location
+      levelInstance.spoonIsHeld = false;
+      levelInstance.isActivelyStirring = false;
+      levelInstance.holdNoMovementStartFrame = null;
+      if (levelInstance.stirringSound && !levelInstance.stirringSound.paused) {
+        levelInstance.stirringSound.pause();
+        levelInstance.stirringSound.currentTime = 0;
       }
-    }
-
-    // Reset targets so spoon smoothly returns
-    levelInstance.targetSpoonScale = 1.0;
-    levelInstance.targetSpoonRotation = levelInstance.spoonBaseRotation;
-    levelInstance.targetSpoonDisplayX = levelInstance.spoonBaseX;
-    levelInstance.spoonMouseStartX = 0;
-    levelInstance.spoonMouseStartY = 0;
-    // Clear the mix-start flag
-    levelInstance.mixStartedWhenAtMixStep = false;
-    return;
-  }
-
-  if (spoonDetectX) {
-    // Rotated-ellipse hit test using canvas Path2D to match the drawn ellipse exactly.
-    const drawW =
-      levelInstance.spoonWidth *
-      (levelInstance.spoonScale || 1) *
-      (typeof SPOON_HITBOX_WIDTH_SCALE !== "undefined"
-        ? SPOON_HITBOX_WIDTH_SCALE
-        : 1);
-    const drawH =
-      levelInstance.spoonHeight *
-      (levelInstance.spoonScale || 1) *
-      (typeof SPOON_HITBOX_HEIGHT_SCALE !== "undefined"
-        ? SPOON_HITBOX_HEIGHT_SCALE
-        : 1);
-    const a = drawW / 2;
-    const b = drawH / 2;
-    // Create a Path2D ellipse centered at spoonDetectX, spoonDetectY with rotation
-    try {
-      // Use Path2D if available, but ensure we test using the same transform
-      // as drawing: translate -> rotate -> scale. To avoid transform mismatch
-      // issues, transform the click point into the spoon's local space
-      // using the inverse transform and test against the unscaled ellipse.
-      const dx = adjustedX - spoonDetectX;
-      const dy = adjustedY - spoonDetectY;
-      const r = levelInstance.spoonRotation || 0; // radians
-      const s = levelInstance.spoonScale || 1;
-      const cosR = Math.cos(r);
-      const sinR = Math.sin(r);
-      // Apply inverse rotation (-r) then inverse scale (divide by s)
-      const lx = (dx * cosR + dy * sinR) / s;
-      const ly = (-dx * sinR + dy * cosR) / s;
-      // Use unscaled semi-axes (based on original image size)
-      const aUnscaled =
-        (levelInstance.spoonWidth / 2) *
-        (typeof SPOON_HITBOX_WIDTH_SCALE !== "undefined"
-          ? SPOON_HITBOX_WIDTH_SCALE
-          : 1);
-      const bUnscaled =
-        (levelInstance.spoonHeight / 2) *
-        (typeof SPOON_HITBOX_HEIGHT_SCALE !== "undefined"
-          ? SPOON_HITBOX_HEIGHT_SCALE
-          : 1);
-      const insideEllipseMath =
-        aUnscaled > 0 &&
-        bUnscaled > 0 &&
-        (lx * lx) / (aUnscaled * aUnscaled) +
-          (ly * ly) / (bUnscaled * bUnscaled) <=
-          1;
-      if (insideEllipseMath) {
-        // Prevent picking up the spoon while any vial/crystal is being
-        // interacted with (held or in motion).
-        const anyVialInteracting = levelInstance.vials.some(
-          (v) => v.isHeld || v.isMoving,
-        );
-        if (!anyVialInteracting) {
-          levelInstance.spoonIsHeld = true;
-          levelInstance.spoonMouseStartX = 0;
-          levelInstance.spoonMouseStartY = 0;
-          // Record if player starts holding spoon at Level 2 when the
-          // sequence has reached the fourth added ingredient (mix step)
-          // so we can allow a partial mix as a valid non-mix.
-          if (
-            levelInstance.levelNumber === 2 &&
-            (levelInstance.addedIngredients || []).length === 4
-          ) {
-            levelInstance.mixStartedWhenAtMixStep = true;
-          }
-          return;
+      // If player started mixing at the correct step but didn't finish,
+      // mark the sequence invalid (partial mixes are not allowed).
+      if (
+        levelInstance.levelNumber === 2 &&
+        levelInstance.mixStartedWhenAtMixStep &&
+        !levelInstance.mixMeterComplete
+      ) {
+        const expectedMixIndex = 4;
+        if (
+          (levelInstance.addedIngredients || []).length === expectedMixIndex
+        ) {
+          levelInstance.sequenceInvalid = true;
+          console.log(
+            "Partial mix (unfinished) at required step — sequence marked invalid",
+          );
         }
-        // Otherwise, ignore the spoon pickup so click can fall through
-        // to vial interactions below.
       }
-    } catch (e) {
-      // If Path2D/ellipse not supported, fall back to math test
-      const dx = adjustedX - spoonDetectX;
-      const dy = adjustedY - spoonDetectY;
-      const r = levelInstance.spoonRotation || 0;
-      const cosR = Math.cos(r);
-      const sinR = Math.sin(r);
-      const lx = dx * cosR + dy * sinR;
-      const ly = -dx * sinR + dy * cosR;
-      const aScaled =
-        (a || 0) *
+
+      // Reset targets so spoon smoothly returns
+      levelInstance.targetSpoonScale = 1.0;
+      levelInstance.targetSpoonRotation = levelInstance.spoonBaseRotation;
+      levelInstance.targetSpoonDisplayX = levelInstance.spoonBaseX;
+      levelInstance.spoonMouseStartX = 0;
+      levelInstance.spoonMouseStartY = 0;
+      // Clear the mix-start flag
+      levelInstance.mixStartedWhenAtMixStep = false;
+      return;
+    }
+
+    if (spoonDetectX) {
+      // Rotated-ellipse hit test using canvas Path2D to match the drawn ellipse exactly.
+      const drawW =
+        levelInstance.spoonWidth *
+        (levelInstance.spoonScale || 1) *
         (typeof SPOON_HITBOX_WIDTH_SCALE !== "undefined"
           ? SPOON_HITBOX_WIDTH_SCALE
           : 1);
-      const bScaled =
-        (b || 0) *
+      const drawH =
+        levelInstance.spoonHeight *
+        (levelInstance.spoonScale || 1) *
         (typeof SPOON_HITBOX_HEIGHT_SCALE !== "undefined"
           ? SPOON_HITBOX_HEIGHT_SCALE
           : 1);
-      const insideEllipse =
-        aScaled > 0 &&
-        bScaled > 0 &&
-        (lx * lx) / (aScaled * aScaled) + (ly * ly) / (bScaled * bScaled) <= 1;
-      if (insideEllipse) {
-        // Prevent picking up the spoon while any vial/crystal is being
-        // interacted with (held or in motion). If a vial is interacting,
-        // allow the click to continue to vial handlers below.
-        const anyVialInteracting = levelInstance.vials.some(
-          (v) => v.isHeld || v.isMoving,
-        );
-        if (!anyVialInteracting) {
-          levelInstance.spoonIsHeld = true;
-          levelInstance.spoonMouseStartX = 0;
-          levelInstance.spoonMouseStartY = 0;
-          if (
-            levelInstance.levelNumber === 2 &&
-            (levelInstance.addedIngredients || []).length === 4
-          ) {
-            levelInstance.mixStartedWhenAtMixStep = true;
+      const a = drawW / 2;
+      const b = drawH / 2;
+      // Create a Path2D ellipse centered at spoonDetectX, spoonDetectY with rotation
+      try {
+        // Use Path2D if available, but ensure we test using the same transform
+        // as drawing: translate -> rotate -> scale. To avoid transform mismatch
+        // issues, transform the click point into the spoon's local space
+        // using the inverse transform and test against the unscaled ellipse.
+        const dx = adjustedX - spoonDetectX;
+        const dy = adjustedY - spoonDetectY;
+        const r = levelInstance.spoonRotation || 0; // radians
+        const s = levelInstance.spoonScale || 1;
+        const cosR = Math.cos(r);
+        const sinR = Math.sin(r);
+        // Apply inverse rotation (-r) then inverse scale (divide by s)
+        const lx = (dx * cosR + dy * sinR) / s;
+        const ly = (-dx * sinR + dy * cosR) / s;
+        // Use unscaled semi-axes (based on original image size)
+        const aUnscaled =
+          (levelInstance.spoonWidth / 2) *
+          (typeof SPOON_HITBOX_WIDTH_SCALE !== "undefined"
+            ? SPOON_HITBOX_WIDTH_SCALE
+            : 1);
+        const bUnscaled =
+          (levelInstance.spoonHeight / 2) *
+          (typeof SPOON_HITBOX_HEIGHT_SCALE !== "undefined"
+            ? SPOON_HITBOX_HEIGHT_SCALE
+            : 1);
+        const insideEllipseMath =
+          aUnscaled > 0 &&
+          bUnscaled > 0 &&
+          (lx * lx) / (aUnscaled * aUnscaled) +
+            (ly * ly) / (bUnscaled * bUnscaled) <=
+            1;
+        if (insideEllipseMath) {
+          // Prevent picking up the spoon while any vial/crystal is being
+          // interacted with (held or in motion).
+          const anyVialInteracting = levelInstance.vials.some(
+            (v) => v.isHeld || v.isMoving,
+          );
+          if (!anyVialInteracting) {
+            levelInstance.spoonIsHeld = true;
+            levelInstance.spoonMouseStartX = 0;
+            levelInstance.spoonMouseStartY = 0;
+            // Record if player starts holding spoon at Level 2 when the
+            // sequence has reached the fourth added ingredient (mix step)
+            // so we can allow a partial mix as a valid non-mix.
+            if (
+              levelInstance.levelNumber === 2 &&
+              (levelInstance.addedIngredients || []).length === 4
+            ) {
+              levelInstance.mixStartedWhenAtMixStep = true;
+            }
+            return;
           }
-          return;
+          // Otherwise, ignore the spoon pickup so click can fall through
+          // to vial interactions below.
+        }
+      } catch (e) {
+        // If Path2D/ellipse not supported, fall back to math test
+        const dx = adjustedX - spoonDetectX;
+        const dy = adjustedY - spoonDetectY;
+        const r = levelInstance.spoonRotation || 0;
+        const cosR = Math.cos(r);
+        const sinR = Math.sin(r);
+        const lx = dx * cosR + dy * sinR;
+        const ly = -dx * sinR + dy * cosR;
+        const aScaled =
+          (a || 0) *
+          (typeof SPOON_HITBOX_WIDTH_SCALE !== "undefined"
+            ? SPOON_HITBOX_WIDTH_SCALE
+            : 1);
+        const bScaled =
+          (b || 0) *
+          (typeof SPOON_HITBOX_HEIGHT_SCALE !== "undefined"
+            ? SPOON_HITBOX_HEIGHT_SCALE
+            : 1);
+        const insideEllipse =
+          aScaled > 0 &&
+          bScaled > 0 &&
+          (lx * lx) / (aScaled * aScaled) + (ly * ly) / (bScaled * bScaled) <=
+            1;
+        if (insideEllipse) {
+          // Prevent picking up the spoon while any vial/crystal is being
+          // interacted with (held or in motion). If a vial is interacting,
+          // allow the click to continue to vial handlers below.
+          const anyVialInteracting = levelInstance.vials.some(
+            (v) => v.isHeld || v.isMoving,
+          );
+          if (!anyVialInteracting) {
+            levelInstance.spoonIsHeld = true;
+            levelInstance.spoonMouseStartX = 0;
+            levelInstance.spoonMouseStartY = 0;
+            if (
+              levelInstance.levelNumber === 2 &&
+              (levelInstance.addedIngredients || []).length === 4
+            ) {
+              levelInstance.mixStartedWhenAtMixStep = true;
+            }
+            return;
+          }
         }
       }
     }
@@ -4230,12 +4235,13 @@ function levelMousePressed() {
       levelInstance.isOrderOpen = true;
 
       // Play paper sound when envelope is clicked
-      const paperSound = document.getElementById("paper-sound");
-      if (paperSound) {
-        paperSound.currentTime = 0; // reset to start
-        paperSound.volume = 1.0; // full volume
-        paperSound.loop = false; // play once
-        paperSound.play().catch(() => {});
+      // Play page-flip sound when envelope is clicked
+      const pageFlipSound = document.getElementById("page-flip-sound");
+      if (pageFlipSound) {
+        pageFlipSound.currentTime = 0; // reset to start
+        pageFlipSound.volume = 1.0; // full volume
+        pageFlipSound.loop = false; // play once
+        pageFlipSound.play().catch(() => {});
       }
 
       // On Level 1, trigger fade-out of envelope guide and enable vial guide on first envelope click
