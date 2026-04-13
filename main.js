@@ -27,7 +27,9 @@ let level;
 let levelInstance;
 
 let potionaryLogo, potionaryLogoDetail, startBg, levelMenu;
-let levelBg,
+let levelBg1,
+  levelBg2,
+  levelBg3,
   orderSheet,
   blankOrderSheet2,
   cauldronImg,
@@ -62,8 +64,10 @@ function preload() {
   startBg = loadImage("assets/background/start-screen.png");
   levelMenu = loadImage("assets/background/level-menu.png");
 
-  // Level 1 assets
-  levelBg = loadImage("assets/background/blue-lvl.png");
+  // Level backgrounds
+  levelBg1 = loadImage("assets/background/level-1.png");
+  levelBg2 = loadImage("assets/background/level-2.png");
+  levelBg3 = loadImage("assets/background/level-3.png");
   recipeBookBg = loadImage("assets/background/recipe-book.png");
   orderSheet = loadImage("assets/order/blank-order-sheet-2.png");
   blankOrderSheet2 = loadImage("assets/order/blank-order-sheet-2.png");
@@ -173,13 +177,21 @@ function preload() {
 // ------------------------------
 // Helper function to create a fresh level instance
 function createLevelInstance() {
+  // Select the appropriate background image based on the current level number
+  let selectedLevelBg = levelBg1;
+  if (currentLevelNumber === 2) {
+    selectedLevelBg = levelBg2;
+  } else if (currentLevelNumber === 3) {
+    selectedLevelBg = levelBg3;
+  }
+
   levelInstance = new Level({
     levelNumber: currentLevelNumber,
     cauldronImg,
     cauldronImgGlow,
     recipeBookClosed,
     recipeBookOpen,
-    levelBg,
+    levelBg: selectedLevelBg,
     orderSheet,
     blankOrderSheet2,
     bottleBlack,
