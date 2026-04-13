@@ -41,7 +41,7 @@ let bottleGreen, bottleRed, bottleBlue, bottleOrange, bottlePink;
 let crystalImg, bowlImg, envelopeImg;
 let greenSymbol, blueSymbol, orangeSymbol;
 let mapIconsDefault, mapIconsHover;
-let mapIconsLevel2Default, mapIconsLevel2Hover;
+let mapIconsLevel2Default;
 let mapIconsLevel3Default, mapIconsLevel3Hover;
 
 // Font names for use with textFont()
@@ -150,7 +150,6 @@ function preload() {
   mapIconsLevel2Default = loadImage(
     "assets/background/map-icons-default-lvl2.png",
   );
-  mapIconsLevel2Hover = loadImage("assets/background/map-icons-hover-lvl2.png");
   mapIconsLevel3Default = loadImage(
     "assets/background/map-icons-default-lvl3.png",
   );

@@ -11,6 +11,12 @@ const BASE_H = 648;
 // Hover animation state for map icons fade
 let mapIconHoverFade = 0;
 const MAP_ICON_FADE_SPEED = 0.08; // fade speed per frame
+// Hover animation state for Level 2 glow
+let level2GlowFade = 0;
+const LEVEL2_GLOW_FADE_SPEED = 0.12; // slightly faster glow fade
+// Hover animation state for Level 1 glow
+let level1GlowFade = 0;
+const LEVEL1_GLOW_FADE_SPEED = 0.12;
 
 // ========== HITBOX CONFIGURATION ==========
 // All hitboxes are centered on the map screen (BASE_W/2, BASE_H/2)
@@ -111,7 +117,8 @@ function drawMap() {
     currentHoverIcons = mapIconsHover;
   } else if (currentLevelNumber === 2) {
     currentDefaultIcons = mapIconsLevel2Default;
-    currentHoverIcons = mapIconsLevel2Hover;
+    // Hover variant removed for Level 2; use default icons only.
+    currentHoverIcons = mapIconsLevel2Default;
   } else {
     // Level 3+
     currentDefaultIcons = mapIconsLevel3Default;
@@ -131,7 +138,10 @@ function drawMap() {
 
   // Determine if hovering over any unlocked level's hitbox
   let isHovering = false;
-  if (currentLevelNumber >= 1 && isPointInLevel1Circle(adjustedMX, adjustedMY)) {
+  if (
+    currentLevelNumber >= 1 &&
+    isPointInLevel1Circle(adjustedMX, adjustedMY)
+  ) {
     isHovering = true;
   }
   if (
@@ -154,13 +164,107 @@ function drawMap() {
     mapIconHoverFade = max(mapIconHoverFade - MAP_ICON_FADE_SPEED, 0);
   }
 
+  // Determine whether the mouse is hovering Level 2 specifically
+  const level2Hovered =
+    currentLevelNumber >= 2 &&
+    isPointInNormanWindow(adjustedMX, adjustedMY, LEVEL2_HITBOX);
+
+  // Determine whether the mouse is hovering Level 1 specifically
+  const level1Hovered =
+    currentLevelNumber >= 1 && isPointInLevel1Circle(adjustedMX, adjustedMY);
+
+  // Animate level1 glow fade separately so it only appears on hover
+  if (level1Hovered) {
+    level1GlowFade = min(level1GlowFade + LEVEL1_GLOW_FADE_SPEED, 1);
+  } else {
+    level1GlowFade = max(level1GlowFade - LEVEL1_GLOW_FADE_SPEED, 0);
+  }
+
+  // Animate level2 glow fade separately so it only appears on hover
+  if (level2Hovered) {
+    level2GlowFade = min(level2GlowFade + LEVEL2_GLOW_FADE_SPEED, 1);
+  } else {
+    level2GlowFade = max(level2GlowFade - LEVEL2_GLOW_FADE_SPEED, 0);
+  }
+
+  // ============ HOVER GLOWS (unified shadowBlur for both levels) ============
+  // Both levels use the same technique: fill the shape with shadowBlur.
+  // The icon image drawn afterwards covers the opaque fill, leaving only
+  // the shadow (glow) visible around the edges.
+
+  // --- Level 2 glow (Norman window shape) ---
+  if (level2GlowFade > 0.001) {
+    const glowW = LEVEL2_HITBOX.rectWidth - 6;
+    const glowH = LEVEL2_HITBOX.rectHeight - 6;
+    const glowLeft = LEVEL2_HITBOX.centerX - glowW / 2;
+    const glowTop = LEVEL2_HITBOX.centerY - glowH;
+    const glowCenterX = LEVEL2_HITBOX.centerX;
+    const glowRadius = glowW / 2;
+    const cornerRadius = 18;
+
+    for (let pass = 0; pass < 3; pass++) {
+      drawingContext.save();
+      drawingContext.shadowColor = `rgba(206,181,58,${(0.7 - pass * 0.15) * level2GlowFade})`;
+      drawingContext.shadowBlur = 12 + pass * 8;
+      drawingContext.shadowOffsetX = 0;
+      drawingContext.shadowOffsetY = 0;
+      drawingContext.fillStyle = `rgba(206,181,58,${0.7 * level2GlowFade})`;
+
+      drawingContext.beginPath();
+      drawingContext.moveTo(glowCenterX - glowRadius, glowTop);
+      drawingContext.arc(glowCenterX, glowTop, glowRadius, Math.PI, 0);
+      drawingContext.lineTo(glowLeft + glowW, glowTop + glowH - cornerRadius);
+      drawingContext.arcTo(
+        glowLeft + glowW,
+        glowTop + glowH,
+        glowLeft + glowW - cornerRadius,
+        glowTop + glowH,
+        cornerRadius,
+      );
+      drawingContext.lineTo(glowLeft + cornerRadius, glowTop + glowH);
+      drawingContext.arcTo(
+        glowLeft,
+        glowTop + glowH,
+        glowLeft,
+        glowTop + glowH - cornerRadius,
+        cornerRadius,
+      );
+      drawingContext.lineTo(glowLeft, glowTop + glowRadius);
+      drawingContext.closePath();
+      drawingContext.fill();
+      drawingContext.restore();
+    }
+  }
+
+  // --- Level 1 glow (circle shape) ---
+  if (level1GlowFade > 0.001) {
+    const glowCX = LEVEL1_HITBOX.centerX;
+    const glowCY = LEVEL1_HITBOX.centerY;
+    const glowR = LEVEL1_HITBOX.radius;
+
+    for (let pass = 0; pass < 3; pass++) {
+      drawingContext.save();
+      drawingContext.shadowColor = `rgba(206,181,58,${(0.7 - pass * 0.15) * level1GlowFade})`;
+      drawingContext.shadowBlur = 12 + pass * 8;
+      drawingContext.shadowOffsetX = 0;
+      drawingContext.shadowOffsetY = 0;
+      drawingContext.fillStyle = `rgba(206,181,58,${0.7 * level1GlowFade})`;
+
+      drawingContext.beginPath();
+      drawingContext.arc(glowCX, glowCY, glowR, 0, Math.PI * 2);
+      drawingContext.closePath();
+      drawingContext.fill();
+      drawingContext.restore();
+    }
+  }
+
   // Draw default image
   imageMode(CENTER);
   image(currentDefaultIcons, mapIconX, mapIconY, mapIconWidth, mapIconHeight);
 
   // Draw hover image on top with fade opacity (only when fading > 0)
-  if (mapIconHoverFade > 0) {
-    5;
+  // For Level 1, skip hover image and use glow instead
+  if (mapIconHoverFade > 0 && currentLevelNumber !== 1) {
     tint(255, mapIconHoverFade * 255);
     image(currentHoverIcons, mapIconX, mapIconY, mapIconWidth, mapIconHeight);
     noTint();
@@ -225,7 +329,10 @@ function mapMousePressed() {
 
   // Determine which unlocked level (if any) was clicked and start it
   let clickedLevel = 0;
-  if (isPointInLevel1Circle(adjustedMX, adjustedMY) && currentLevelNumber >= 1) {
+  if (
+    isPointInLevel1Circle(adjustedMX, adjustedMY) &&
+    currentLevelNumber >= 1
+  ) {
     clickedLevel = 1;
   }
   if (
